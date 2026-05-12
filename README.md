@@ -3,7 +3,7 @@
 [![GitHub release](https://img.shields.io/github/v/release/diridium-com/simple-channel-history)](https://github.com/diridium-com/simple-channel-history/releases/latest)
 [![License: MPL-2.0](https://img.shields.io/badge/License-MPL_2.0-brightgreen.svg)](https://www.mozilla.org/en-US/MPL/2.0/)
 [![Java 17+](https://img.shields.io/badge/Java-17%2B-blue)](https://openjdk.org/projects/jdk/17/)
-[![OIE 4.5.2+](https://img.shields.io/badge/OIE-4.5.2%2B-blue)](https://github.com/kayyagari/connect)
+[![OIE 4.6.0+](https://img.shields.io/badge/OIE-4.6.0%2B-blue)](https://github.com/kayyagari/connect)
 
 An Open Integration Engine plugin for tracking version history of Channels and Code Templates.
 
@@ -36,6 +36,14 @@ An Open Integration Engine plugin for tracking version history of Channels and C
 ## Building
 
 Requires Java 17+ and OIE libraries in your Maven repository (local or remote).
+
+The public repsy mirror at `repo.repsy.io/mvn/kpalang/mirthconnect` does not yet carry the 4.6.0 engine artifacts. Build the engine (`ant` in `donkey/` then `server/`) from a sibling checkout, then run:
+
+```bash
+ENGINE_DIR=/path/to/engine ./scripts/install-engine-jars.sh
+```
+
+The script installs the 12 engine jars this plugin builds against (`mirth-server`, `donkey-server`, `mirth-client-core`, `mirth-client`, plus 8 connector/plugin shared jars) at version 4.6.0 into your local Maven repository. If `ENGINE_DIR` is unset, it defaults to `../engine` relative to this repo.
 
 ### Development Build (unsigned)
 
