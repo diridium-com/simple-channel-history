@@ -1,7 +1,7 @@
 {
     "id": "simple-channel-history",
     "name": "Simple Channel History",
-    "version": "2.7.2",
+    "version": "2.8.0",
     "author": "Diridium Technologies Inc.",
     "description": "Version history for channels and code templates: a 'View History' action on each, with a decomposed component diff (side-by-side), revert, and prune, plus a Deleted Items settings tab. Web administrator UI for the simple-channel-history engine plugin.",
     "oie": { "apiMin": "4.6" },

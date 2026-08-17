@@ -1,13 +1,16 @@
-# Builds the plugin against a downloaded OIE distribution on a semver tag, publishes
-# a GitHub Release with the zip, then opens a community-catalog PR so the Community
-# Store offers it.
+# Builds the plugin against a downloaded OIE distribution on a semver tag and stages
+# a DRAFT GitHub Release with the unsigned zip + .sha256 sidecar.
 #
-#   git tag v2.7.2 && git push origin v2.7.2
+#   git tag v2.8.0 && git push origin v2.8.0
+#
+# The draft is never published by CI. Release flow from here (see RELEASING.md):
+# build and sign locally (YubiKey, -Psigning), replace the draft's zip AND regenerate
+# its .sha256 sidecar from the signed zip, publish by hand, then run the "Catalog PR"
+# workflow (catalog.yml) to submit the published release to the community catalog.
 #
 # The tag drives the version stamped into the build (-Drevision → pom/${project.version},
 # so plugin.xml pluginVersion + the library jar names) and webadmin/plugin.json; oie.json
-# is verified to match the tag. Requires a CATALOG_TOKEN repo secret (fine-grained PAT
-# with Contents + Pull requests read/write on the catalog repo).
+# is verified to match the tag.
 
 name: Release
 
@@ -29,10 +32,6 @@ env:
 jobs:
   release:
     runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.ver.outputs.version }}
-      sha256: ${{ steps.pkg.outputs.sha256 }}
-      minengine: ${{ steps.pkg.outputs.minengine }}
     steps:
       - uses: actions/checkout@v4
 
@@ -116,106 +115,14 @@ jobs:
           cp "$SRC" "out/${ASSET}"
           ( cd out && sha256sum "${ASSET}" > "${ASSET}.sha256" )
           echo "asset=${ASSET}" >> "$GITHUB_OUTPUT"
-          echo "sha256=$(cut -d' ' -f1 "out/${ASSET}.sha256")" >> "$GITHUB_OUTPUT"
-          echo "minengine=$(jq -r '.minEngineVersion // "4.6.0"' oie.json)" >> "$GITHUB_OUTPUT"
 
-      - name: Create GitHub Release with assets
+      - name: Create DRAFT GitHub Release with assets
+        # Stays a draft: the zip is unsigned. A human signs locally, replaces the
+        # zip and its .sha256 sidecar, and publishes (see RELEASING.md).
         uses: softprops/action-gh-release@v2
         with:
+          draft: true
           files: |
             out/${{ steps.pkg.outputs.asset }}
             out/${{ steps.pkg.outputs.asset }}.sha256
           prerelease: ${{ contains(github.ref_name, '-') }}
-
-  # Opens a PR against the community catalog with this release's manifest — catalog
-  # CI digest-verifies before merge, and the index rebuild on merge makes connected
-  # engines offer the update on their next sync.
-  catalog-manifest:
-    needs: release
-    runs-on: ubuntu-latest
-    env:
-      CATALOG_REPO: gibson9583/oie-community-catalog
-      PLUGIN_ID: simple-channel-history
-      VERSION: ${{ needs.release.outputs.version }}
-      SHA256: ${{ needs.release.outputs.sha256 }}
-      MIN_ENGINE: ${{ needs.release.outputs.minengine }}
-      GH_TOKEN: ${{ secrets.CATALOG_TOKEN }}
-    steps:
-      - name: Require the catalog token
-        run: |
-          if [ -z "$GH_TOKEN" ]; then
-            echo "::error::CATALOG_TOKEN secret is not set — cannot open the catalog PR. Add a fine-grained PAT with Contents+Pull requests access to $CATALOG_REPO."
-            exit 1
-          fi
-
-      - uses: actions/checkout@v4
-        with:
-          repository: gibson9583/oie-community-catalog
-          token: ${{ secrets.CATALOG_TOKEN }}
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Write the package meta.json (from the plugin's oie.json)
-        run: |
-          mkdir -p "manifests/plugins/${PLUGIN_ID}"
-          curl -fsSL "https://raw.githubusercontent.com/${{ github.repository }}/v${VERSION}/oie.json" -o /tmp/oie.json
-          node -e '
-            const o = JSON.parse(require("fs").readFileSync("/tmp/oie.json","utf8"));
-            const meta = {
-              id: o.id, name: o.name, description: o.description, type: o.type,
-              publisher: (o.authors && o.authors[0]) || o.id,
-              repository: o.homepage, homepage: o.homepage, documentation: o.documentation,
-              license: o.license, authors: o.authors || [], keywords: o.keywords || [],
-              deprecated: !!o.deprecated
-            };
-            require("fs").writeFileSync(process.env.META_PATH, JSON.stringify(meta, null, 4) + "\n");
-          '
-        env:
-          META_PATH: manifests/plugins/${{ env.PLUGIN_ID }}/meta.json
-
-      - name: Write the version manifest
-        run: |
-          mkdir -p "manifests/plugins/${PLUGIN_ID}"
-          cat > "manifests/plugins/${PLUGIN_ID}/${VERSION}.json" <<EOF
-          {
-              "version": "${VERSION}",
-              "minEngineVersion": "${MIN_ENGINE}",
-              "maxEngineVersion": null,
-              "installerUrl": "https://github.com/${{ github.repository }}/releases/download/v${VERSION}/${PLUGIN_ID}-${VERSION}.zip",
-              "sha256": "${SHA256}",
-              "restartRequired": true,
-              "publishedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-              "releaseNotesUrl": "https://github.com/${{ github.repository }}/releases/tag/v${VERSION}",
-              "docsUrl": "https://raw.githubusercontent.com/${{ github.repository }}/v${VERSION}/docs/store.md"
-          }
-          EOF
-          # Surface which UIs this version ships (ui from the tagged oie.json,
-          # downloaded above); omitted entirely when oie.json declares none.
-          UI="$(jq -c '.ui // empty' /tmp/oie.json)"
-          if [ -n "$UI" ]; then
-            jq --indent 4 --argjson ui "$UI" '. + {ui: $ui}' \
-              "manifests/plugins/${PLUGIN_ID}/${VERSION}.json" > /tmp/manifest.json
-            mv /tmp/manifest.json "manifests/plugins/${PLUGIN_ID}/${VERSION}.json"
-          fi
-
-      - name: Validate (schema + digest download)
-        run: node scripts/build-index.mjs --lint --verify "manifests/plugins/${PLUGIN_ID}/${VERSION}.json"
-
-      - name: Open the catalog PR
-        run: |
-          BRANCH="${PLUGIN_ID}-${VERSION}"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -b "$BRANCH"
-          git add manifests
-          git commit -m "${PLUGIN_ID} ${VERSION}"
-          git push -f origin "$BRANCH"
-          if gh pr list -R "$CATALOG_REPO" --head "$BRANCH" --json number -q '.[0].number' | grep -q .; then
-            echo "PR already open for $BRANCH — branch updated."
-          else
-            gh pr create -R "$CATALOG_REPO" --head "$BRANCH" \
-              --title "${PLUGIN_ID} ${VERSION}" \
-              --body "Automated manifest for [${PLUGIN_ID} v${VERSION}](https://github.com/${{ github.repository }}/releases/tag/v${VERSION}). Digest verified against the release asset by catalog CI."
-          fi

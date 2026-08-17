@@ -35,4 +35,4 @@ PostgreSQL, MySQL, Oracle, SQL Server, and Derby.
 Requires Open Integration Engine **4.6.0+**. The web administrator UI requires a web
 admin build that provides the channel/code-template action extension points and the
 Monaco-backed diff viewer (4.6+). A restart is required after install. See the
-[README](https://github.com/gibson9583/simple-channel-history#readme) for details.
+[README](https://github.com/diridium-com/simple-channel-history#readme) for details.

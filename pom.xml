@@ -15,7 +15,7 @@
     <packaging>pom</packaging>
 
     <properties>
-        <revision>2.7.2</revision>
+        <revision>2.8.0</revision>
 
         <plugin.supported.mc.versions>${mc.version}</plugin.supported.mc.versions>
 
