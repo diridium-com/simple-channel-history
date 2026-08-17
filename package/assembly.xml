@@ -23,4 +23,17 @@
             </includes>
         </fileSet>
     </fileSets>
+    <!-- Web administrator UI: discovered by the OIE web admin at
+         <extensions>/simple-channel-history/webadmin/plugin.json (built by the
+         frontend-maven-plugin into ../webadmin/web/plugin.js). -->
+    <files>
+        <file>
+            <source>../webadmin/plugin.json</source>
+            <outputDirectory>${packageName}/webadmin</outputDirectory>
+        </file>
+        <file>
+            <source>../webadmin/web/plugin.js</source>
+            <outputDirectory>${packageName}/webadmin/web</outputDirectory>
+        </file>
+    </files>
 </assembly>

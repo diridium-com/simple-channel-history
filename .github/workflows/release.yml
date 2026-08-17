@@ -1,0 +1,128 @@
+# Builds the plugin against a downloaded OIE distribution on a semver tag and stages
+# a DRAFT GitHub Release with the unsigned zip + .sha256 sidecar.
+#
+#   git tag v2.8.0 && git push origin v2.8.0
+#
+# The draft is never published by CI. Release flow from here (see RELEASING.md):
+# build and sign locally (YubiKey, -Psigning), replace the draft's zip AND regenerate
+# its .sha256 sidecar from the signed zip, publish by hand, then run the "Catalog PR"
+# workflow (catalog.yml) to submit the published release to the community catalog.
+#
+# The tag drives the version stamped into the build (-Drevision → pom/${project.version},
+# so plugin.xml pluginVersion + the library jar names) and webadmin/plugin.json; oie.json
+# is verified to match the tag.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+env:
+  # OIE distribution that supplies the engine jars this plugin builds against.
+  OIE_TAG: v4.6.0-rc1
+  OIE_TARBALL: oie_unix_4_6_0-rc1.tar.gz
+  # Maven version the engine dependencies are declared with (pom.xml mc.version).
+  MC_VERSION: '4.6.0'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Resolve and verify version
+        id: ver
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          MANIFEST_VERSION="$(jq -r .version oie.json)"; MANIFEST_VERSION="${MANIFEST_VERSION#v}"
+          if [ "$VERSION" != "$MANIFEST_VERSION" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} implies version $VERSION but oie.json says $MANIFEST_VERSION"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Cache OIE distribution
+        id: oie-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.OIE_TARBALL }}
+          key: oie-dist-${{ env.OIE_TAG }}
+
+      - name: Download OIE distribution (engine jars)
+        if: steps.oie-cache.outputs.cache-hit != 'true'
+        run: curl -fSL -o "$OIE_TARBALL" "https://github.com/OpenIntegrationEngine/engine/releases/download/${OIE_TAG}/${OIE_TARBALL}"
+
+      - name: Install engine jars into the local Maven repo
+        run: |
+          tar xzf "$OIE_TARBALL"
+          # groupId:artifactId:path-under-oie — the 12 jars this plugin's modules
+          # depend on (scope provided). Installed at MC_VERSION to match pom.xml.
+          JARS=(
+            "com.mirth.connect:mirth-server:server-lib/mirth-server.jar"
+            "com.mirth.connect:donkey-server:server-lib/donkey/donkey-server.jar"
+            "com.mirth.connect:mirth-client-core:server-lib/mirth-client-core.jar"
+            "com.mirth.connect:mirth-client:client-lib/mirth-client.jar"
+            "com.mirth.connect.connectors:vm-shared:extensions/vm/vm-shared.jar"
+            "com.mirth.connect.connectors:js-shared:extensions/js/js-shared.jar"
+            "com.mirth.connect.connectors:tcp-shared:extensions/tcp/tcp-shared.jar"
+            "com.mirth.connect.plugins:mllpmode-shared:extensions/mllpmode/mllpmode-shared.jar"
+            "com.mirth.connect.plugins:http-shared:extensions/http/http-shared.jar"
+            "com.mirth.connect.plugins:javascriptstep-shared:extensions/javascriptstep/javascriptstep-shared.jar"
+            "com.mirth.connect.plugins.datatypes:datatype-raw-shared:extensions/datatype-raw/datatype-raw-shared.jar"
+            "com.mirth.connect.plugins.datatypes:datatype-hl7v2-shared:extensions/datatype-hl7v2/datatype-hl7v2-shared.jar"
+          )
+          for entry in "${JARS[@]}"; do
+            IFS=':' read -r group artifact rel <<< "$entry"
+            jar="$GITHUB_WORKSPACE/oie/$rel"
+            test -f "$jar" || { echo "::error::missing engine jar $rel in the OIE distribution"; exit 1; }
+            mvn -B -ntp install:install-file -Dfile="$jar" -DgroupId="$group" \
+              -DartifactId="$artifact" -Dversion="$MC_VERSION" -Dpackaging=jar
+          done
+
+      - name: Stamp version (webadmin manifest)
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          jq --arg v "$VERSION" '.version = $v' webadmin/plugin.json > webadmin/plugin.json.tmp && mv webadmin/plugin.json.tmp webadmin/plugin.json
+
+      - name: Build extension
+        # -Drevision drives ${project.version}: plugin.xml pluginVersion, the library
+        # jar names, and the zip name (simple-channel-history-<version>.zip). Signing
+        # is skipped by default (no keystore in CI).
+        run: mvn -B -ntp -DskipTests -Drevision="${{ steps.ver.outputs.version }}" package
+
+      - name: Stage the release asset and checksum
+        id: pkg
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          SRC="$(find package/target -maxdepth 1 -name 'simple-channel-history-*.zip' | head -n1)"
+          if [ -z "$SRC" ]; then
+            echo "::error::No simple-channel-history zip found in package/target/"; ls -l package/target || true; exit 1
+          fi
+          ASSET="simple-channel-history-${VERSION}.zip"
+          mkdir -p out
+          cp "$SRC" "out/${ASSET}"
+          ( cd out && sha256sum "${ASSET}" > "${ASSET}.sha256" )
+          echo "asset=${ASSET}" >> "$GITHUB_OUTPUT"
+
+      - name: Create DRAFT GitHub Release with assets
+        # Stays a draft: the zip is unsigned. A human signs locally, replaces the
+        # zip and its .sha256 sidecar, and publishes (see RELEASING.md).
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: |
+            out/${{ steps.pkg.outputs.asset }}
+            out/${{ steps.pkg.outputs.asset }}.sha256
+          prerelease: ${{ contains(github.ref_name, '-') }}

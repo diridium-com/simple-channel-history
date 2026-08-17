@@ -1,0 +1,131 @@
+# Opens a community-catalog PR for an already-PUBLISHED release, so the Community
+# Store offers it. Run manually (Actions → Catalog PR → Run workflow) after the
+# draft staged by release.yml has been signed locally, its zip and .sha256 sidecar
+# replaced with the signed artifact, and the release published by hand.
+#
+# The digest submitted to the catalog is computed HERE, from the published asset —
+# i.e. from the signed zip users actually download — never from the CI build.
+# Downloading also doubles as the guard: a draft release has no public download
+# URL, so running this too early fails instead of submitting a stale digest.
+#
+# Requires a CATALOG_TOKEN repo secret (fine-grained PAT with Contents + Pull
+# requests read/write on the catalog repo).
+
+name: Catalog PR
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Published version to submit, without the v (e.g. 2.8.0)'
+        required: true
+
+env:
+  CATALOG_REPO: gibson9583/oie-community-catalog
+  PLUGIN_ID: simple-channel-history
+  GH_TOKEN: ${{ secrets.CATALOG_TOKEN }}
+
+jobs:
+  catalog-manifest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require the catalog token
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::CATALOG_TOKEN secret is not set — cannot open the catalog PR. Add a fine-grained PAT with Contents+Pull requests access to $CATALOG_REPO."
+            exit 1
+          fi
+
+      - name: Download the published asset and compute its digest
+        run: |
+          VERSION="${{ inputs.version }}"; VERSION="${VERSION#v}"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          ASSET="${PLUGIN_ID}-${VERSION}.zip"
+          URL="https://github.com/${{ github.repository }}/releases/download/v${VERSION}/${ASSET}"
+          if ! curl -fSL -o "/tmp/${ASSET}" "$URL"; then
+            echo "::error::Cannot download ${URL} — is release v${VERSION} published (not still a draft)?"
+            exit 1
+          fi
+          SHA256="$(sha256sum "/tmp/${ASSET}" | cut -d' ' -f1)"
+          echo "SHA256=$SHA256" >> "$GITHUB_ENV"
+          # Cross-check the release's .sha256 sidecar against the asset it sits
+          # next to. A mismatch means the sidecar wasn't regenerated after the
+          # signed zip replaced the CI build — fix the release, then re-run.
+          curl -fSL -o /tmp/sidecar.sha256 "${URL}.sha256"
+          SIDECAR="$(cut -d' ' -f1 /tmp/sidecar.sha256)"
+          if [ "$SHA256" != "$SIDECAR" ]; then
+            echo "::error::The release's ${ASSET}.sha256 sidecar ($SIDECAR) does not match the published zip ($SHA256). Regenerate the sidecar from the signed zip and update the release, then re-run."
+            exit 1
+          fi
+          curl -fsSL "https://raw.githubusercontent.com/${{ github.repository }}/v${VERSION}/oie.json" -o /tmp/oie.json
+          echo "MIN_ENGINE=$(jq -r '.minEngineVersion // "4.6.0"' /tmp/oie.json)" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.CATALOG_REPO }}
+          token: ${{ secrets.CATALOG_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Write the package meta.json (from the plugin's oie.json)
+        run: |
+          mkdir -p "manifests/plugins/${PLUGIN_ID}"
+          node -e '
+            const o = JSON.parse(require("fs").readFileSync("/tmp/oie.json","utf8"));
+            const meta = {
+              id: o.id, name: o.name, description: o.description, type: o.type,
+              publisher: (o.authors && o.authors[0]) || o.id,
+              repository: o.homepage, homepage: o.homepage, documentation: o.documentation,
+              license: o.license, authors: o.authors || [], keywords: o.keywords || [],
+              deprecated: !!o.deprecated
+            };
+            require("fs").writeFileSync(process.env.META_PATH, JSON.stringify(meta, null, 4) + "\n");
+          '
+        env:
+          META_PATH: manifests/plugins/${{ env.PLUGIN_ID }}/meta.json
+
+      - name: Write the version manifest
+        run: |
+          cat > "manifests/plugins/${PLUGIN_ID}/${VERSION}.json" <<EOF
+          {
+              "version": "${VERSION}",
+              "minEngineVersion": "${MIN_ENGINE}",
+              "maxEngineVersion": null,
+              "installerUrl": "https://github.com/${{ github.repository }}/releases/download/v${VERSION}/${PLUGIN_ID}-${VERSION}.zip",
+              "sha256": "${SHA256}",
+              "restartRequired": true,
+              "publishedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+              "releaseNotesUrl": "https://github.com/${{ github.repository }}/releases/tag/v${VERSION}",
+              "docsUrl": "https://raw.githubusercontent.com/${{ github.repository }}/v${VERSION}/docs/store.md"
+          }
+          EOF
+          # Surface which UIs this version ships (ui from the tagged oie.json,
+          # downloaded above); omitted entirely when oie.json declares none.
+          UI="$(jq -c '.ui // empty' /tmp/oie.json)"
+          if [ -n "$UI" ]; then
+            jq --indent 4 --argjson ui "$UI" '. + {ui: $ui}' \
+              "manifests/plugins/${PLUGIN_ID}/${VERSION}.json" > /tmp/manifest.json
+            mv /tmp/manifest.json "manifests/plugins/${PLUGIN_ID}/${VERSION}.json"
+          fi
+
+      - name: Validate (schema + digest download)
+        run: node scripts/build-index.mjs --lint --verify "manifests/plugins/${PLUGIN_ID}/${VERSION}.json"
+
+      - name: Open the catalog PR
+        run: |
+          BRANCH="${PLUGIN_ID}-${VERSION}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add manifests
+          git commit -m "${PLUGIN_ID} ${VERSION}"
+          git push -f origin "$BRANCH"
+          if gh pr list -R "$CATALOG_REPO" --head "$BRANCH" --json number -q '.[0].number' | grep -q .; then
+            echo "PR already open for $BRANCH — branch updated."
+          else
+            gh pr create -R "$CATALOG_REPO" --head "$BRANCH" \
+              --title "${PLUGIN_ID} ${VERSION}" \
+              --body "Automated manifest for [${PLUGIN_ID} v${VERSION}](https://github.com/${{ github.repository }}/releases/tag/v${VERSION}). Digest computed from the published (signed) release asset; catalog CI re-verifies before merge."
+          fi

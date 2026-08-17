@@ -17,6 +17,16 @@ An Open Integration Engine plugin for tracking version history of Channels and C
 - Prune older versions to manage storage
 - Deleted items tracking — automatically saves a final XML snapshot when channels or code templates are deleted
 - Database-backed storage (history travels with database backups)
+- **Runs in both administrators** — the classic Swing Administrator and the OIE web administrator, with full feature parity
+
+### Web administrator
+
+The extension ships a web administrator UI in `webadmin/` (built to `webadmin/web/plugin.js` by the Maven build and packaged into the extension zip). Once installed, the OIE web admin discovers it automatically and adds:
+
+- a **View History** action on the Channels view (right-click a channel, or the Channel Tasks pane) and on the Code Templates tree, and
+- a **Channel History: Deleted Items** tab under Settings.
+
+The diff uses the web admin's Monaco-backed side-by-side viewer; decomposition, change detection, and reorder detection run in the browser (the engine servlet is unchanged and serves the same raw revision XML to both UIs). Requires OIE web administrator 4.6+ (which provides the `registerChannelAction` / `registerCodeTemplateAction` extension points and `createDiffEditor`).
 
 <img src="https://raw.githubusercontent.com/wiki/diridium-com/simple-channel-history/images/4.jpg" alt="History dialog showing revision table" width="500">
 

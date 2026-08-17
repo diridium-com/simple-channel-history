@@ -1,0 +1,12 @@
+{
+    "name": "simple-channel-history-webadmin",
+    "version": "2.8.0",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "build": "node build.mjs"
+    },
+    "devDependencies": {
+        "esbuild": "^0.21.0"
+    }
+}
