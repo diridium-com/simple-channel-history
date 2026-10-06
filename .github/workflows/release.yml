@@ -10,7 +10,8 @@
 #
 # The tag drives the version stamped into the build (-Drevision → pom/${project.version},
 # so plugin.xml pluginVersion + the library jar names) and webadmin/plugin.json; oie.json
-# is verified to match the tag.
+# is verified to match the tag. The engine version comes from the POM's mc.version (see
+# build.yml for why it is not hardcoded here).
 
 name: Release
 
@@ -21,13 +22,6 @@ on:
 
 permissions:
   contents: write
-
-env:
-  # OIE distribution that supplies the engine jars this plugin builds against.
-  OIE_TAG: v4.6.0-rc1
-  OIE_TARBALL: oie_unix_4_6_0-rc1.tar.gz
-  # Maven version the engine dependencies are declared with (pom.xml mc.version).
-  MC_VERSION: '4.6.0'
 
 jobs:
   release:
@@ -53,18 +47,36 @@ jobs:
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
+      - name: Resolve the engine version from the POM
+        id: engine
+        run: |
+          MC_VERSION="$(mvn -q -N help:evaluate -Dexpression=mc.version -DforceStdout)"
+          if [ -z "$MC_VERSION" ]; then
+            echo "::error::Could not read mc.version from pom.xml"
+            exit 1
+          fi
+          echo "mc_version=$MC_VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v${MC_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tarball=oie_unix_${MC_VERSION//./_}.tar.gz" >> "$GITHUB_OUTPUT"
+
       - name: Cache OIE distribution
         id: oie-cache
         uses: actions/cache@v4
         with:
-          path: ${{ env.OIE_TARBALL }}
-          key: oie-dist-${{ env.OIE_TAG }}
+          path: ${{ steps.engine.outputs.tarball }}
+          key: oie-dist-${{ steps.engine.outputs.tag }}
 
       - name: Download OIE distribution (engine jars)
         if: steps.oie-cache.outputs.cache-hit != 'true'
+        env:
+          OIE_TAG: ${{ steps.engine.outputs.tag }}
+          OIE_TARBALL: ${{ steps.engine.outputs.tarball }}
         run: curl -fSL -o "$OIE_TARBALL" "https://github.com/OpenIntegrationEngine/engine/releases/download/${OIE_TAG}/${OIE_TARBALL}"
 
       - name: Install engine jars into the local Maven repo
+        env:
+          OIE_TARBALL: ${{ steps.engine.outputs.tarball }}
+          MC_VERSION: ${{ steps.engine.outputs.mc_version }}
         run: |
           tar xzf "$OIE_TARBALL"
           # groupId:artifactId:path-under-oie — the 12 jars this plugin's modules
