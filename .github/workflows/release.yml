@@ -5,8 +5,8 @@
 #
 # The draft is never published by CI. Release flow from here (see RELEASING.md):
 # build and sign locally (YubiKey, -Psigning), replace the draft's zip AND regenerate
-# its .sha256 sidecar from the signed zip, publish by hand, then run the "Catalog PR"
-# workflow (catalog.yml) to submit the published release to the community catalog.
+# its .sha256 sidecar from the signed zip, publish by hand, then submit the published
+# release to the community catalog.
 #
 # The tag drives the version stamped into the build (-Drevision → pom/${project.version},
 # so plugin.xml pluginVersion + the library jar names) and webadmin/plugin.json; oie.json
