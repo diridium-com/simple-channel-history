@@ -9,6 +9,7 @@ target
 # Signing configuration (machine-specific, contains secrets)
 yubikey-pkcs11.cfg
 certchain.pem
+*.jks
 
 # Web administrator UI build
 webadmin/node_modules/
