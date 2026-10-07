@@ -7,11 +7,12 @@ Every release is signed. CI builds an unsigned draft, the signed build is made w
 
 ## 1. Bump the version
 
-The version lives in three committed files. Change all three in the commit you tag:
+Change all of these in the commit you tag:
 
 - `<revision>` in the parent `pom.xml`
 - `version` in `oie.json` (the release workflow fails if it does not match the tag)
 - `version` in `webadmin/plugin.json`
+- `version` in `webadmin/package.json`, and the two root entries in `webadmin/package-lock.json`
 
 CI stamps the tag into the build on its own, but the signed build is made from the committed files, so they have to agree.
 
@@ -25,7 +26,7 @@ git tag vX.Y.Z && git push origin vX.Y.Z
 
 ## 3. Build the signed zip
 
-Check out the tag on the machine with the YubiKey. The `signing` profile needs `yubikey-pkcs11.cfg` (start from `yubikey-pkcs11.cfg.example`) and `certchain.pem` in the repo root. Both are gitignored. From the repo root:
+Check out the tag on the machine with the YubiKey. If its local Maven repository does not have the engine jars for this `mc.version` yet, run `./scripts/install-engine-jars.sh` first. The `signing` profile needs `yubikey-pkcs11.cfg` (start from `yubikey-pkcs11.cfg.example`) and `certchain.pem` in the repo root. Both are gitignored. From the repo root:
 
 ```bash
 mvn clean package -Psigning -Dsigning.storepass=<yubikey-pin>

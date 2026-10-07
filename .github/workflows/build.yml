@@ -4,10 +4,10 @@
 # Builds and tests every push to main and every pull request.
 #
 # The engine jars this plugin compiles against are not on the public repsy
-# mirror at 4.6.0, which is why scripts/install-engine-jars.sh exists for local
-# builds. CI cannot assume a sibling engine checkout, so it takes the same jars
-# from the published OIE distribution instead. The tarball is cached by tag, so
-# it is downloaded once and reused until the pinned version changes.
+# mirror at 4.6.0, so they come from the published OIE distribution, the same
+# tarball scripts/install-engine-jars.sh uses for local builds. The tarball is
+# cached by tag, so it is downloaded once and reused until the pinned version
+# changes.
 
 name: Build
 
@@ -65,8 +65,7 @@ jobs:
           OIE_TARBALL: ${{ steps.engine.outputs.tarball }}
         run: curl -fSL -o "$OIE_TARBALL" "https://github.com/OpenIntegrationEngine/engine/releases/download/${OIE_TAG}/${OIE_TARBALL}"
 
-      # The same 12 jars scripts/install-engine-jars.sh installs from a local
-      # engine checkout, taken from the published distribution instead.
+      # The same 12 jars scripts/install-engine-jars.sh installs locally.
       - name: Install engine jars into the local Maven repo
         env:
           OIE_TARBALL: ${{ steps.engine.outputs.tarball }}

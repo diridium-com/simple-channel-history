@@ -47,13 +47,11 @@ The diff uses the web admin's Monaco-backed side-by-side viewer; decomposition, 
 
 Requires Java 17+ and OIE libraries in your Maven repository (local or remote).
 
-The public repsy mirror at `repo.repsy.io/mvn/kpalang/mirthconnect` does not yet carry the 4.6.0 engine artifacts. Build the engine (`ant` in `donkey/` then `server/`) from a sibling checkout, then run:
-
 ```bash
-ENGINE_DIR=/path/to/engine ./scripts/install-engine-jars.sh
+./scripts/install-engine-jars.sh
 ```
 
-The script installs the 12 engine jars this plugin builds against (`mirth-server`, `donkey-server`, `mirth-client-core`, `mirth-client`, plus 8 connector/plugin shared jars) at version 4.6.0 into your local Maven repository. If `ENGINE_DIR` is unset, it defaults to `../engine` relative to this repo.
+The script installs the 12 engine jars this plugin builds against (`mirth-server`, `donkey-server`, `mirth-client-core`, `mirth-client`, plus 8 connector/plugin shared jars) into your local Maven repository, taken from the published OIE release matching the POM's `mc.version` and checked against that release's `sha256sums`. Run it once per engine version.
 
 ### Development Build (unsigned)
 
