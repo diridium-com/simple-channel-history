@@ -15,3 +15,6 @@ certchain.pem
 webadmin/node_modules/
 node/
 webadmin/web/plugin.js
+
+# End-to-end tests (e2e/)
+__pycache__/

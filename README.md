@@ -80,6 +80,19 @@ mvn clean package -Psigning
 
 The plugin zip will be in `package/target/simple-channel-history-<version>.zip`.
 
+### End-to-end tests
+
+`e2e/run.py` installs a built zip into the released OIE engine through the engine's own installer and checks the plugin on a real database: a fresh install, an upgrade from each release in `e2e/upgrade-sources.txt`, and an uninstall. CI runs it on every push and pull request against Derby, PostgreSQL, MySQL, SQL Server (jTDS and Microsoft drivers) and Oracle.
+
+Locally it needs Java 17, Docker for every database but Derby, and the OIE distribution tarball (`scripts/install-engine-jars.sh` leaves a checked copy in `target/oie-dist/`):
+
+```bash
+python3 e2e/run.py --db postgres --zip package/target/simple-channel-history-<version>.zip \
+    --tarball target/oie-dist/oie_unix_4_6_0.tar.gz --work /tmp/sch-e2e-1
+```
+
+`--work` must not exist yet. Each engine and its logs stay there.
+
 ## Installation
 
 Install using the Extensions manager in the OIE Administrator, or manually extract

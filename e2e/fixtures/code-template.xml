@@ -1,0 +1,24 @@
+<codeTemplate version="4.6.0">
+  <id>00000000-0000-0000-0000-000000000000</id>
+  <name>e2e fixture</name>
+  <revision>1</revision>
+  <contextSet>
+    <delegate>
+      <contextType>SOURCE_RECEIVER</contextType>
+      <contextType>SOURCE_FILTER_TRANSFORMER</contextType>
+      <contextType>DESTINATION_FILTER_TRANSFORMER</contextType>
+      <contextType>DESTINATION_DISPATCHER</contextType>
+      <contextType>DESTINATION_RESPONSE_TRANSFORMER</contextType>
+      <contextType>CHANNEL_POSTPROCESSOR</contextType>
+    </delegate>
+  </contextSet>
+  <properties class="com.mirth.connect.model.codetemplates.BasicCodeTemplateProperties">
+    <type>FUNCTION</type>
+    <code>/**
+ * Doubles a number. Fixture for the simple-channel-history end-to-end tests.
+ */
+function schE2eDouble(n) {
+    return n * 2;
+}</code>
+  </properties>
+</codeTemplate>
