@@ -1,0 +1,5 @@
+# Releases the upgrade scenarios start from, one per line: version, SHA-256 of the zip, download URL.
+# 2.8.0: the current signed release.
+# 2.7.2: what the OIE Community Store served, from Chris Gibson's fork, until 2026-10-07.
+2.8.0 d89bd8ac376bc6acc5f22e56d9798e59341e86de17a398dc7c7b6ea863ccfe27 https://github.com/diridium-com/simple-channel-history/releases/download/v2.8.0/simple-channel-history-2.8.0.zip
+2.7.2 5606635de1237b1d84610ab94cf482dd994c6a4b1e7d79d1442dd0fae073f5e6 https://github.com/gibson9583/simple-channel-history/releases/download/v2.7.2/simple-channel-history-2.7.2.zip

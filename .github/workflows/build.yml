@@ -1,7 +1,9 @@
 # SPDX-License-Identifier: MPL-2.0
 # Copyright (c) 2025-2026 Diridium Technologies Inc.
 #
-# Builds and tests every push to main and every pull request.
+# Builds and tests every push to main and every pull request. The e2e job then
+# installs the built zip into the released engine and runs e2e/run.py on each
+# database the engine supports.
 #
 # The engine jars this plugin compiles against are not on the public repsy
 # mirror at 4.6.0, so they come from the published OIE distribution, the same
@@ -23,6 +25,9 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.engine.outputs.tag }}
+      tarball: ${{ steps.engine.outputs.tarball }}
     steps:
       - uses: actions/checkout@v4
 
@@ -108,3 +113,87 @@ jobs:
             exit 1
           fi
           echo "surefire report files: $reports"
+
+      - name: Upload the plugin zip for the e2e job
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-zip
+          path: package/target/simple-channel-history-*.zip
+          if-no-files-found: error
+          retention-days: 7
+
+  # Installs the zip into the released OIE engine through its own installer, the way a
+  # user would, and runs the scenarios in e2e/run.py: fresh install, upgrade from each
+  # release in e2e/upgrade-sources.txt, and uninstall. One job per database.
+  e2e:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        db: [derby, postgres, mysql, sqlserver, sqlserver-ms, oracle]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # Restore only: the build job saves this cache, and six jobs saving the same key race.
+      - name: Restore OIE distribution
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ needs.build.outputs.tarball }}
+          key: oie-dist-${{ needs.build.outputs.tag }}
+
+      # The build job only compiles against jars from the tarball. Here the whole engine
+      # runs, so the tarball is checked against the release's own sha256sums first.
+      - name: Download and verify OIE distribution
+        env:
+          OIE_TAG: ${{ needs.build.outputs.tag }}
+          OIE_TARBALL: ${{ needs.build.outputs.tarball }}
+        run: |
+          base="https://github.com/OpenIntegrationEngine/engine/releases/download/${OIE_TAG}"
+          if [ ! -f "$OIE_TARBALL" ]; then
+            curl -fSL -o "$OIE_TARBALL" "${base}/${OIE_TARBALL}"
+          fi
+          curl -fsSL -o sha256sums "${base}/sha256sums"
+          expected="$(awk -v f="$OIE_TARBALL" '{ n = $2; sub(/^\*/, "", n) } n == f { print $1 }' sha256sums)"
+          if [ -z "$expected" ]; then
+            echo "::error::${OIE_TARBALL} is not listed in the release's sha256sums"
+            exit 1
+          fi
+          echo "${expected}  ${OIE_TARBALL}" | sha256sum -c -
+
+      - name: Download the plugin zip
+        uses: actions/download-artifact@v4
+        with:
+          name: plugin-zip
+          path: plugin-zip
+
+      - name: Run the e2e scenarios
+        env:
+          DB: ${{ matrix.db }}
+          OIE_TARBALL: ${{ needs.build.outputs.tarball }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          zips=(plugin-zip/simple-channel-history-*.zip)
+          if [ "${#zips[@]}" -ne 1 ] || [ ! -f "${zips[0]}" ]; then
+            echo "::error::expected exactly one plugin zip, found: ${zips[*]}"
+            exit 1
+          fi
+          python3 e2e/run.py --db "$DB" --zip "${zips[0]}" --tarball "$OIE_TARBALL" --work "$RUNNER_TEMP/e2e"
+
+      - name: Upload engine logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-logs-${{ matrix.db }}
+          path: |
+            ${{ runner.temp }}/e2e/*/oie/logs/
+            ${{ runner.temp }}/e2e/*/oie/console-*.log
+          if-no-files-found: ignore
+          retention-days: 7
