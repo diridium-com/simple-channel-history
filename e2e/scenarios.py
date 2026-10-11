@@ -4,7 +4,7 @@
 """The scenarios. Each one gets its own new database and a freshly unpacked engine.
 
 A check that fails is a FAIL and fails the run. A NOTE records behaviour without judging it:
-the OIE #296 scenario, and the plugin's migrator warnings until simple-channel-history #27 is fixed.
+the OIE #296 scenario.
 """
 
 import hashlib
@@ -67,10 +67,18 @@ def install_and_restart(r, engine, api, zip_path):
 def check_logs(r, engine):
     errors = engine.plugin_log_lines("ERROR")
     r.check("no ERROR lines from the plugin in mirth.log", not errors, " | ".join(errors[:3]))
+    # simple-channel-history #27: Derby and Oracle logged a migrator warning on every startup after the first.
     warnings = engine.plugin_log_lines("WARN")
-    if warnings:
-        # simple-channel-history #27: on Derby and Oracle every startup after the first logs these.
-        r.note("plugin WARN lines in mirth.log", f"{len(warnings)}, first: {warnings[0][:200]}")
+    r.check("no WARN lines from the plugin in mirth.log", not warnings, " | ".join(warnings[:3]))
+
+
+def check_tables_created_once(r, engine):
+    """The migrator runs on every startup. Its create scripts must run on the first one only."""
+    lines = engine.plugin_log_lines("INFO")
+    for description in ("History tables", "Deleted item tables"):
+        count = sum(1 for line in lines if f"HistoryMigrator: {description} created" in line)
+        r.check(f"'{description} created' logged once across {engine.starts} engine starts", count == 1,
+                f"logged {count} times")
 
 
 # ---------- the full history checks
@@ -234,6 +242,7 @@ def fresh(r, engine, db, dbname, new_zip, **_):
     history_verify(r, api, st)
     check_rows(r, db, dbname, [2, 4, 0, 0])
     issue_296(r, api)
+    check_tables_created_once(r, engine)
     check_logs(r, engine)
 
 

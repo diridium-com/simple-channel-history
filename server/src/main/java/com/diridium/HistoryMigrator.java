@@ -4,6 +4,10 @@
 
 package com.diridium;
 
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
@@ -25,21 +29,69 @@ public class HistoryMigrator extends Migrator {
 
     @Override
     public void migrate() throws MigrationException {
-        executeScriptSafely("/" + getDatabaseType() + "-history-tables.sql", "History tables");
-        executeScriptSafely("/" + getDatabaseType() + "-deleted-tables.sql", "Deleted item tables");
+        createIfMissing("/" + getDatabaseType() + "-history-tables.sql", "History tables",
+                "channel_history", "code_template_history");
+        createIfMissing("/" + getDatabaseType() + "-deleted-tables.sql", "Deleted item tables",
+                "deleted_channel", "deleted_code_template");
     }
 
-    private void executeScriptSafely(String scriptName, String description) {
+    /**
+     * The engine runs every plugin migrator on every startup, so a script runs only when its
+     * tables are missing. Derby and Oracle have no CREATE TABLE IF NOT EXISTS, and letting the
+     * create fail logged a warning with a stack trace on every restart (#27). Failures are
+     * logged at ERROR because stock OIE logs nothing below it.
+     *
+     * This only creates tables that are missing. A change to an existing table (a new column,
+     * a type change) never reaches an upgraded install this way: it needs a stored schema
+     * version and numbered steps, as RbacMigrator in diridium-com/role-based-access-control does.
+     */
+    private void createIfMissing(String scriptName, String description, String... tables) {
         try {
-            executeScript(scriptName);
-            log.info("{} created successfully", description);
-        } catch (Exception e) {
-            String msg = e.getMessage() != null ? e.getMessage().toLowerCase(Locale.ROOT) : "";
-            if (msg.contains("already exist")) {
-                log.info("{} already exist, skipping", description);
-            } else {
-                log.warn("{} migration may have failed: {}", description, e.getMessage(), e);
+            boolean allExist = true;
+            for (String table : tables) {
+                allExist &= tableExists(table);
             }
+            if (allExist) {
+                return;
+            }
+            executeScript(scriptName);
+            log.info("{} created", description);
+        } catch (Exception e) {
+            log.error("{} could not be created: {}", description, e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Looks only in the engine's own database and schema. The engine's DatabaseUtil.tableExists
+     * passes no catalog, which MySQL Connector/J answers from every database the user can see.
+     * Derby and Oracle store unquoted names in upper case, the others in lower case.
+     */
+    private boolean tableExists(String table) throws SQLException {
+        Connection connection = getConnection();
+        DatabaseMetaData meta = connection.getMetaData();
+        String catalog = connection.getCatalog();
+        String schema = currentSchema(connection);
+        String escape = meta.getSearchStringEscape();
+        for (String name : new String[] { table.toUpperCase(Locale.ROOT), table.toLowerCase(Locale.ROOT) }) {
+            // '_' is a wildcard in metadata patterns
+            String pattern = escape == null ? name : name.replace("_", escape + "_");
+            try (ResultSet rs = meta.getTables(catalog, schema, pattern, new String[] { "TABLE" })) {
+                if (rs.next()) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    // jTDS 1.3.1 (the engine's default SQL Server driver) implements Connection.getSchema() as a stub
+    // that throws AbstractMethodError. A null schema still finds the table, since the catalog narrows
+    // the search.
+    private static String currentSchema(Connection connection) {
+        try {
+            return connection.getSchema();
+        } catch (Throwable t) {
+            return null;
         }
     }
 
