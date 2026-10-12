@@ -4,22 +4,19 @@
 package com.diridium;
 
 import java.awt.BorderLayout;
+import java.awt.Color;
 import java.awt.FlowLayout;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.OutputStreamWriter;
 import java.text.SimpleDateFormat;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 
+import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
-import javax.swing.JFileChooser;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
@@ -35,6 +32,7 @@ import org.jdesktop.swingx.decorator.HighlighterFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.mirth.connect.client.core.ForbiddenException;
 import com.mirth.connect.client.ui.AbstractSettingsPanel;
 import com.mirth.connect.client.ui.PlatformUI;
 import com.mirth.connect.client.ui.UIConstants;
@@ -64,6 +62,9 @@ public class DeletedItemsSettingsPanel extends AbstractSettingsPanel {
     private JButton btnDownload;
     private JTextField searchField;
     private JButton btnPurge;
+    private JLabel failureLabel;
+
+    private static final Color FAILURE_COLOR = new Color(176, 0, 32);
 
     public DeletedItemsSettingsPanel(String tabName) {
         super(tabName);
@@ -139,7 +140,16 @@ public class DeletedItemsSettingsPanel extends AbstractSettingsPanel {
         btnPurge.addActionListener(e -> purge());
         buttonPanel.add(btnPurge);
 
-        add(buttonPanel, BorderLayout.NORTH);
+        failureLabel = new JLabel();
+        failureLabel.setForeground(FAILURE_COLOR);
+        failureLabel.setBorder(BorderFactory.createEmptyBorder(0, 6, 6, 6));
+        failureLabel.setVisible(false);
+
+        JPanel top = new JPanel(new BorderLayout());
+        top.add(buttonPanel, BorderLayout.NORTH);
+        top.add(failureLabel, BorderLayout.SOUTH);
+
+        add(top, BorderLayout.NORTH);
         add(new JScrollPane(table), BorderLayout.CENTER);
     }
 
@@ -156,33 +166,39 @@ public class DeletedItemsSettingsPanel extends AbstractSettingsPanel {
 
     @Override
     public void doRefresh() {
+        // A list that fails to load is said so on the panel, rather than shown as an empty list.
+        List<String> failures = new ArrayList<>();
         new SwingWorker<List<DeletedItemInfo>, Void>() {
             @Override
             protected List<DeletedItemInfo> doInBackground() throws Exception {
                 List<DeletedItemInfo> all = new ArrayList<>();
                 ChannelHistoryServletInterface svc = getServlet();
-                if (svc != null) {
-                    try {
-                        List<DeletedItemInfo> channels = svc.getDeletedChannels();
-                        for (DeletedItemInfo info : channels) {
-                            info.setType(DeletedItemInfo.TYPE_CHANNEL);
-                        }
-                        all.addAll(channels);
-                    } catch (Exception e) {
-                        log.error("Failed to load deleted channels", e);
-                    }
-                    try {
-                        List<DeletedItemInfo> codeTemplates = svc.getDeletedCodeTemplates();
-                        for (DeletedItemInfo info : codeTemplates) {
-                            info.setType(DeletedItemInfo.TYPE_CODE_TEMPLATE);
-                        }
-                        all.addAll(codeTemplates);
-                    } catch (Exception e) {
-                        log.error("Failed to load deleted code templates", e);
-                    }
-                    // Sort newest-first
-                    all.sort((a, b) -> Long.compare(b.getDateDeleted(), a.getDateDeleted()));
+                if (svc == null) {
+                    failures.add("Deleted items could not be loaded: the plugin's server side did not answer.");
+                    return all;
                 }
+                try {
+                    List<DeletedItemInfo> channels = svc.getDeletedChannels();
+                    for (DeletedItemInfo info : channels) {
+                        info.setType(DeletedItemInfo.TYPE_CHANNEL);
+                    }
+                    all.addAll(channels);
+                } catch (Exception e) {
+                    log.error("Failed to load deleted channels", e);
+                    failures.add("Deleted channels could not be loaded: " + describe(e));
+                }
+                try {
+                    List<DeletedItemInfo> codeTemplates = svc.getDeletedCodeTemplates();
+                    for (DeletedItemInfo info : codeTemplates) {
+                        info.setType(DeletedItemInfo.TYPE_CODE_TEMPLATE);
+                    }
+                    all.addAll(codeTemplates);
+                } catch (Exception e) {
+                    log.error("Failed to load deleted code templates", e);
+                    failures.add("Deleted code templates could not be loaded: " + describe(e));
+                }
+                // Sort newest-first
+                all.sort((a, b) -> Long.compare(b.getDateDeleted(), a.getDateDeleted()));
                 return all;
             }
 
@@ -193,10 +209,28 @@ public class DeletedItemsSettingsPanel extends AbstractSettingsPanel {
                 } catch (Exception e) {
                     log.error("Failed to refresh deleted items", e);
                     allItems = Collections.emptyList();
+                    failures.add("Deleted items could not be loaded: " + describe(e));
                 }
+                showFailures(failures);
                 applyFilter();
             }
         }.execute();
+    }
+
+    /** A short reason for a failed request: a refused permission in words, anything else as its message. */
+    private static String describe(Throwable e) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            if (t instanceof ForbiddenException) {
+                return "you are not authorized to view them.";
+            }
+        }
+        return e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+    }
+
+    private void showFailures(List<String> failures) {
+        failureLabel.setText(failures.isEmpty() ? "" : "<html>" + String.join("<br>", failures.stream()
+                .map(f -> f.replace("&", "&amp;").replace("<", "&lt;")).toList()) + "</html>");
+        failureLabel.setVisible(!failures.isEmpty());
     }
 
     private void applyFilter() {
@@ -280,18 +314,15 @@ public class DeletedItemsSettingsPanel extends AbstractSettingsPanel {
                     ChannelXmlDecomposer.DecomposeResult rightResult = ChannelXmlDecomposer.decomposeWithNames(right);
                     DecomposedDiffWindow dw = DecomposedDiffWindow.create(null, title,
                             leftLabel, rightLabel, leftResult, rightResult, left, right);
-                    dw.setSize(PlatformUI.MIRTH_FRAME.getWidth() - 10, PlatformUI.MIRTH_FRAME.getHeight() - 10);
-                    dw.setVisible(true);
+                    DiffWindow.showOverAdministrator(dw);
                 } catch (Exception decompositionEx) {
                     log.warn("Channel decomposition failed, falling back to raw diff: {}", decompositionEx.getMessage(), decompositionEx);
                     DiffWindow dw = DiffWindow.create(title, leftLabel, rightLabel, left, right);
-                    dw.setSize(PlatformUI.MIRTH_FRAME.getWidth() - 10, PlatformUI.MIRTH_FRAME.getHeight() - 10);
-                    dw.setVisible(true);
+                    DiffWindow.showOverAdministrator(dw);
                 }
             } else {
                 DiffWindow dw = DiffWindow.create(title, leftLabel, rightLabel, left, right);
-                dw.setSize(PlatformUI.MIRTH_FRAME.getWidth() - 10, PlatformUI.MIRTH_FRAME.getHeight() - 10);
-                dw.setVisible(true);
+                DiffWindow.showOverAdministrator(dw);
             }
         } catch (Exception e) {
             PlatformUI.MIRTH_FRAME.alertThrowable(PlatformUI.MIRTH_FRAME, e);
@@ -329,18 +360,15 @@ public class DeletedItemsSettingsPanel extends AbstractSettingsPanel {
                 try {
                     ChannelXmlDecomposer.DecomposeResult result = ChannelXmlDecomposer.decomposeWithNames(xml);
                     DecomposedDiffWindow dw = DecomposedDiffWindow.createViewOnly(null, title, label, result, xml);
-                    dw.setSize(PlatformUI.MIRTH_FRAME.getWidth() - 10, PlatformUI.MIRTH_FRAME.getHeight() - 10);
-                    dw.setVisible(true);
+                    DiffWindow.showOverAdministrator(dw);
                 } catch (Exception decompositionEx) {
                     log.warn("Channel decomposition failed, falling back to raw view: {}", decompositionEx.getMessage(), decompositionEx);
                     DiffWindow dw = DiffWindow.createViewOnly(title, label, xml);
-                    dw.setSize(PlatformUI.MIRTH_FRAME.getWidth() - 10, PlatformUI.MIRTH_FRAME.getHeight() - 10);
-                    dw.setVisible(true);
+                    DiffWindow.showOverAdministrator(dw);
                 }
             } else {
                 DiffWindow dw = DiffWindow.createViewOnly(title, label, xml);
-                dw.setSize(PlatformUI.MIRTH_FRAME.getWidth() - 10, PlatformUI.MIRTH_FRAME.getHeight() - 10);
-                dw.setVisible(true);
+                DiffWindow.showOverAdministrator(dw);
             }
         } catch (Exception e) {
             PlatformUI.MIRTH_FRAME.alertThrowable(PlatformUI.MIRTH_FRAME, e);
@@ -368,16 +396,9 @@ public class DeletedItemsSettingsPanel extends AbstractSettingsPanel {
                 return;
             }
 
-            JFileChooser chooser = new JFileChooser();
-            chooser.setSelectedFile(new File(info.getName() + ".xml"));
-            int result = chooser.showSaveDialog(this);
-            if (result == JFileChooser.APPROVE_OPTION) {
-                File file = chooser.getSelectedFile();
-                try (OutputStreamWriter writer = new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8)) {
-                    writer.write(xml);
-                    PlatformUI.MIRTH_FRAME.alertInformation(this, "XML saved to " + file.getAbsolutePath());
-                }
-            }
+            // The engine's own export: it asks before overwriting, adds .xml, and encrypts the file when the
+            // server's encryption.export setting is on, as an exported channel or code template is.
+            PlatformUI.MIRTH_FRAME.exportFile(xml, info.getName(), "XML", "Deleted " + info.getType().toLowerCase() + " snapshot");
         } catch (Exception e) {
             PlatformUI.MIRTH_FRAME.alertThrowable(PlatformUI.MIRTH_FRAME, e);
         }
@@ -400,10 +421,12 @@ public class DeletedItemsSettingsPanel extends AbstractSettingsPanel {
         if (svc == null) return;
 
         try {
-            if (DeletedItemInfo.TYPE_CHANNEL.equals(info.getType())) {
-                svc.purgeDeletedChannel(info.getId());
-            } else {
-                svc.purgeDeletedCodeTemplate(info.getId());
+            boolean purged = DeletedItemInfo.TYPE_CHANNEL.equals(info.getType())
+                    ? svc.purgeDeletedChannel(info.getId())
+                    : svc.purgeDeletedCodeTemplate(info.getId());
+            if (!purged) {
+                // Nothing was purged: someone else purged it first.
+                PlatformUI.MIRTH_FRAME.alertInformation(this, "The snapshot for \"" + info.getName() + "\" was already purged.");
             }
             doRefresh();
         } catch (Exception e) {

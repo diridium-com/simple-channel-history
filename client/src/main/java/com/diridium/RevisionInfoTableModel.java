@@ -68,9 +68,9 @@ public class RevisionInfoTableModel extends AbstractTableModel {
         if (minutes >= 60) {
             return df.format(new Date(t));
         } else if (minutes > 0) {
-            return minutes + " minutes ago";
+            return minutes + (minutes == 1 ? " minute ago" : " minutes ago");
         } else {
-            return seconds + " seconds ago";
+            return seconds + (seconds == 1 ? " second ago" : " seconds ago");
         }
     }
 }

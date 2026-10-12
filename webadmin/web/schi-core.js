@@ -57,8 +57,8 @@ export function formatRevisionTime(ms) {
     const seconds = Math.floor(elapsed / 1000);
     const minutes = Math.floor(seconds / 60);
     if (minutes >= 60) return formatDateTime(t);
-    if (minutes > 0) return `${minutes} minutes ago`;
-    return `${seconds} seconds ago`;
+    if (minutes > 0) return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'} ago`;
+    return `${seconds} ${seconds === 1 ? 'second' : 'seconds'} ago`;
 }
 
 /* ---- change types + colors (ComponentTreePanel) ---------------------------- */
