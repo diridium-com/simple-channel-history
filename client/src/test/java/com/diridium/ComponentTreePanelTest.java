@@ -4,13 +4,19 @@
 package com.diridium;
 
 import static org.junit.Assert.*;
-import static org.junit.Assume.assumeFalse;
 
-import java.awt.GraphicsEnvironment;
+import java.awt.Component;
+import java.awt.Container;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Enumeration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+
+import javax.swing.JTree;
+import javax.swing.tree.DefaultMutableTreeNode;
 
 import org.junit.Test;
 
@@ -153,10 +159,12 @@ public class ComponentTreePanelTest {
                 new DecomposedComponent("Destination [1]/Configuration", "Configuration",
                         "config", "Destination [1]"));
 
-        assumeFalse("Skipping Swing test in headless environment", GraphicsEnvironment.isHeadless());
+        // Same steps, other order: the transformer is detected as reordered...
+        assertEquals(Set.of("Destination [1]/Transformer"), ComponentTreePanel.reorderedSubGroups(left, right));
+
+        // ...the tree says so, and both steps still count as changed, since each position's content differs.
         ComponentTreePanel panel = new ComponentTreePanel(left, right, null, null);
-        // Panel detects the reorder — changed count should reflect that steps are modified
-        // (2 steps show as modified because content at each position differs)
+        assertTrue(treeLabels(panel).toString(), treeLabels(panel).stream().anyMatch(l -> l.contains("(steps reordered)")));
         assertEquals(2, panel.getChangedCount());
     }
 
@@ -179,9 +187,37 @@ public class ComponentTreePanelTest {
                 new DecomposedComponent("Destination [1]/Configuration", "Configuration",
                         "config", "Destination [1]"));
 
-        assumeFalse("Skipping Swing test in headless environment", GraphicsEnvironment.isHeadless());
+        // Content genuinely changed: one changed step, and not flagged as a reorder.
+        assertTrue(ComponentTreePanel.reorderedSubGroups(left, right).isEmpty());
         ComponentTreePanel panel = new ComponentTreePanel(left, right, null, null);
-        // Content genuinely changed — should show 1 changed, NOT be flagged as reorder
+        assertTrue(treeLabels(panel).toString(), treeLabels(panel).stream().noneMatch(l -> l.contains("(steps reordered)")));
         assertEquals(1, panel.getChangedCount());
+    }
+
+    /** Every node label in the panel's tree. */
+    private static List<String> treeLabels(Container panel) {
+        JTree tree = findTree(panel);
+        assertNotNull("the panel has a tree", tree);
+        List<String> labels = new ArrayList<>();
+        Enumeration<?> nodes = ((DefaultMutableTreeNode) tree.getModel().getRoot()).preorderEnumeration();
+        while (nodes.hasMoreElements()) {
+            labels.add(String.valueOf(nodes.nextElement()));
+        }
+        return labels;
+    }
+
+    private static JTree findTree(Container container) {
+        for (Component child : container.getComponents()) {
+            if (child instanceof JTree) {
+                return (JTree) child;
+            }
+            if (child instanceof Container) {
+                JTree found = findTree((Container) child);
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+        return null;
     }
 }

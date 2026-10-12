@@ -11,8 +11,9 @@ import socket
 import subprocess
 import tarfile
 import time
+import zipfile
 
-from oie import Api
+from oie import Api, ApiError
 
 
 def free_port():
@@ -51,6 +52,8 @@ class Engine:
         self.home = home
         self.java_home = java_home
         self.process = None
+        self.console = None
+        self.last_start_lost_port = False
         self.port = free_port()
         self.starts = 0
         # Stock OIE logs only ERROR. The plugin's migrator and repository log at INFO and WARN,
@@ -60,26 +63,49 @@ class Engine:
 
     def configure(self, database_settings):
         values = {
-            "https.port": str(self.port),
-            "http.port": str(free_port()),
             "https.host": "127.0.0.1",
             "http.host": "127.0.0.1",
         }
         values.update(database_settings)
         set_properties(os.path.join(self.home, "conf", "mirth.properties"), values)
+        self._set_ports()
+
+    def _set_ports(self):
+        self.port = free_port()
+        set_properties(os.path.join(self.home, "conf", "mirth.properties"),
+                       {"https.port": str(self.port), "http.port": str(free_port())})
 
     def start(self):
+        try:
+            return self._start()
+        except ApiError:
+            # free_port only finds a port that was free a moment ago. If something took it before the
+            # engine bound it, try once more on new ports.
+            if not self.last_start_lost_port:
+                raise
+            self.stop()
+            self._set_ports()
+            return self._start()
+
+    def _start(self):
         env = dict(os.environ)
         if self.java_home:
             env["JAVA_HOME"] = self.java_home
+            # The launcher (install4j) tries this first, and the java on PATH before JAVA_HOME, so
+            # without it the engine could run on whichever java is first on the PATH.
             env["INSTALL4J_JAVA_HOME_OVERRIDE"] = self.java_home
         self.starts += 1
-        console = open(os.path.join(self.home, f"console-{self.starts}.log"), "w", encoding="utf-8")
+        self.console = open(os.path.join(self.home, f"console-{self.starts}.log"), "w", encoding="utf-8")
         log_start = len(self.log())
+        self.last_start_lost_port = False
         self.process = subprocess.Popen(["./oieserver"], cwd=self.home, env=env,
-                                        stdout=console, stderr=subprocess.STDOUT)
+                                        stdout=self.console, stderr=subprocess.STDOUT)
         api = Api(self.port)
-        api.login(alive=lambda: self.process.poll() is None and not self._startup_failed(log_start))
+        try:
+            api.login(alive=lambda: self.process.poll() is None and not self._startup_failed(log_start))
+        except ApiError:
+            self.last_start_lost_port = "port is already in use" in self.log()[log_start:]
+            raise
         return api
 
     # Lines com.mirth.connect.server.Mirth logs when it gives up on startup. The JVM keeps running
@@ -99,26 +125,51 @@ class Engine:
                 self.process.kill()
                 self.process.wait()
         self.process = None
+        if self.console:
+            self.console.close()
+            self.console = None
 
     def restart(self):
         self.stop()
         return self.start()
 
     def log(self):
-        path = os.path.join(self.home, "logs", "mirth.log")
-        if not os.path.exists(path):
+        """All of mirth.log: the parts rolled over at 500 KB (mirth.log.<n>.zip, oldest first), then the live file."""
+        logs = os.path.join(self.home, "logs")
+        if not os.path.isdir(logs):
             return ""
-        with open(path, encoding="utf-8", errors="replace") as f:
-            return f.read()
+        parts = []
+        rolled = [f for f in os.listdir(logs) if re.fullmatch(r"mirth\.log\.\d+\.zip", f)]
+        for name in sorted(rolled, key=lambda f: int(f.split(".")[2])):
+            with zipfile.ZipFile(os.path.join(logs, name)) as z:
+                parts += [z.read(member).decode("utf-8", "replace") for member in z.namelist()]
+        path = os.path.join(logs, "mirth.log")
+        if os.path.exists(path):
+            with open(path, encoding="utf-8", errors="replace") as f:
+                parts.append(f.read())
+        return "".join(parts)
 
+    # mirth.log's layout: "%-5p %d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %c: %m".
+    LINE = re.compile(r"^(\S+)\s+\S+ \S+ \[.*?\] (\S+): (.*)$")
     # The plugin's classes sit directly in com.diridium. Other Diridium plugins, such as rbac in the
     # rbac scenario, use subpackages (com.diridium.rbac), and their lines are not this plugin's.
-    PLUGIN_LOGGER = re.compile(r"\bcom\.diridium\.[A-Z]")
+    PLUGIN_LOGGER = re.compile(r"^com\.diridium\.[A-Z]")
+    OTHER_DIRIDIUM_LOGGER = re.compile(r"^com\.diridium\.[a-z]")
+    PLUGIN_NAMES = ("simple-channel-history", "Simple Channel History")
 
     def plugin_log_lines(self, level):
-        """Lines the plugin logged at the given level."""
-        return [line for line in self.log().splitlines()
-                if line.startswith(level) and self.PLUGIN_LOGGER.search(line)]
+        """Lines the plugin logged at the given level, and lines the engine logged about the plugin."""
+        found = []
+        for line in self.log().splitlines():
+            m = self.LINE.match(line)
+            if not m or m.group(1) != level:
+                continue
+            logger, message = m.group(2), m.group(3)
+            about_plugin = (not self.OTHER_DIRIDIUM_LOGGER.match(logger)
+                            and any(name in message for name in self.PLUGIN_NAMES))
+            if self.PLUGIN_LOGGER.match(logger) or about_plugin:
+                found.append(line)
+        return found
 
     def extension_files(self, name):
         folder = os.path.join(self.home, "extensions", name)

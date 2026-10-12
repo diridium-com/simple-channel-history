@@ -5,7 +5,12 @@ package com.diridium;
 
 import static org.junit.Assert.*;
 
+import java.awt.Component;
+import java.awt.Container;
+import java.util.ArrayList;
 import java.util.List;
+
+import javax.swing.JTextPane;
 
 import org.junit.Test;
 
@@ -131,15 +136,48 @@ public class SimpleDiffPanelTest {
 
     @Test
     public void testEmptyContentProducesEmptyList() {
-        // Verify the fix: empty string splits to empty list, not [""]
-        // This ensures entirely new/removed components get INSERT/DELETE deltas (green/red)
-        // instead of CHANGE deltas (blue/yellow)
-        String empty = "";
-        List<String> lines = empty.isEmpty() ? List.of() : java.util.Arrays.asList(empty.split("\n", -1));
-        assertTrue("Empty content should produce empty list", lines.isEmpty());
+        // Empty content is no lines, not [""], so an entirely new or removed component diffs as
+        // INSERT/DELETE (green/red) rather than CHANGE (blue/yellow).
+        assertTrue(SimpleDiffPanel.splitLines("").isEmpty());
+        assertEquals(List.of("line1", "line2"), SimpleDiffPanel.splitLines("line1\nline2"));
+        assertEquals(List.of("line1", ""), SimpleDiffPanel.splitLines("line1\n"));
+    }
 
-        String nonEmpty = "line1\nline2";
-        List<String> nonEmptyLines = nonEmpty.isEmpty() ? List.of() : java.util.Arrays.asList(nonEmpty.split("\n", -1));
-        assertEquals(2, nonEmptyLines.size());
+    @Test
+    public void testDeletedAndInsertedLinesArePaddedToAlign() {
+        // b is deleted and d inserted: each side gets a blank padding line where the other has one,
+        // so the two panes stay line-for-line aligned.
+        SimpleDiffPanel panel = new SimpleDiffPanel("a\nb\nc", "a\nc\nd");
+        List<JTextPane> panes = new ArrayList<>();
+        collectTextPanes(panel, panes);
+        assertEquals(2, panes.size());
+        List<String> left = lines(panes.get(0));
+        List<String> right = lines(panes.get(1));
+        assertEquals("left " + left + ", right " + right, left.size(), right.size());
+        assertEquals(List.of("a", "b", "c", ""), left);
+        assertEquals(List.of("a", "", "c", "d"), right);
+    }
+
+    /** The pane's lines, trimmed: a padding line is a single space, so it keeps its height. */
+    private static List<String> lines(JTextPane pane) {
+        String text = pane.getText();
+        if (text.endsWith("\n")) {
+            text = text.substring(0, text.length() - 1);
+        }
+        List<String> lines = new ArrayList<>();
+        for (String line : text.split("\n", -1)) {
+            lines.add(line.trim());
+        }
+        return lines;
+    }
+
+    private static void collectTextPanes(Container container, List<JTextPane> found) {
+        for (Component child : container.getComponents()) {
+            if (child instanceof JTextPane) {
+                found.add((JTextPane) child);
+            } else if (child instanceof Container) {
+                collectTextPanes((Container) child, found);
+            }
+        }
     }
 }

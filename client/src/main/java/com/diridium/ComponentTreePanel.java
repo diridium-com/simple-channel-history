@@ -80,10 +80,17 @@ public class ComponentTreePanel extends JPanel {
             this.groupDisplayNames.putAll(rightGroupDisplayNames);
         }
         this.changeTypes = computeChangeTypes();
-        this.reorderedSubGroups = computeReorderedSubGroups();
+        this.reorderedSubGroups = reorderedSubGroups(leftComponents, rightComponents);
         this.allKeys = computeAllKeys();
 
         setLayout(new BorderLayout());
+
+        // Before the tree: its renderer reads showLabelsCheckBox, and the tree can render as soon as
+        // the renderer is set.
+        showChangedOnlyCheckBox = new JCheckBox("Show Changed Only", false);
+        showChangedOnlyCheckBox.addActionListener(e -> rebuildTree());
+
+        showLabelsCheckBox = new JCheckBox("Show Labels", true);
 
         tree = new JTree();
         tree.getSelectionModel().setSelectionMode(TreeSelectionModel.SINGLE_TREE_SELECTION);
@@ -105,12 +112,7 @@ public class ComponentTreePanel extends JPanel {
 
         add(new JScrollPane(tree), BorderLayout.CENTER);
 
-        showChangedOnlyCheckBox = new JCheckBox("Show Changed Only", false);
-        showChangedOnlyCheckBox.addActionListener(e -> rebuildTree());
-
-        showLabelsCheckBox = new JCheckBox("Show Labels", true);
         showLabelsCheckBox.addActionListener(e -> tree.repaint());
-
         JPanel checkBoxPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         checkBoxPanel.add(showChangedOnlyCheckBox);
         checkBoxPanel.add(showLabelsCheckBox);
@@ -171,7 +173,8 @@ public class ComponentTreePanel extends JPanel {
      * but in a different order (pure reorder). Strips sequenceNumber from content
      * before comparing since it's purely positional and always changes on reorder.
      */
-    private Set<String> computeReorderedSubGroups() {
+    static Set<String> reorderedSubGroups(Map<String, DecomposedComponent> leftComponents,
+                                          Map<String, DecomposedComponent> rightComponents) {
         Set<String> result = new LinkedHashSet<>();
 
         // Find all sub-group parent keys (keys containing "/" that are used as parentGroup)

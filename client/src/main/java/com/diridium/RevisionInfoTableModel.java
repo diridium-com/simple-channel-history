@@ -57,7 +57,7 @@ public class RevisionInfoTableModel extends AbstractTableModel {
         return revisions.get(row);
     }
 
-    private String formatTime(long t) {
+    static String formatTime(long t) {
         long elapsed = System.currentTimeMillis() - t;
         if (elapsed < 0) {
             return TIME_FORMAT.format(Instant.ofEpochMilli(t).atZone(ZoneId.systemDefault()));

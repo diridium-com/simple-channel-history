@@ -240,6 +240,14 @@ def history_verify(r, api, st):
                 desc.startswith(st["A"]["m"]["v1"]) and "BEGIN REVERT HISTORY" in desc)
     if "P" in st:
         r.check("code template P still has 2 rows after the restart", len(c.history_ids(api, "template", st["P"])) == 2)
+    if "A" in st:
+        check_json_list(r, api, "channel A's history", "/history", {"channelId": st["A"]["id"]},
+                        "com.diridium.RevisionInfo", ("hash", "revision", "committerName", "time"), 2)
+    # Before the purges below: two deleted channels (an array) and one deleted template (a single object).
+    check_json_list(r, api, "deleted channels", "/deletedChannels", None, "com.diridium.DeletedItemInfo",
+                    ("id", "itemId", "name", "deletedBy", "dateDeleted"), 2)
+    check_json_list(r, api, "deleted code templates", "/deletedCodeTemplates", None, "com.diridium.DeletedItemInfo",
+                    ("id", "itemId", "name", "deletedBy", "dateDeleted"), 1)
     for key, kind in (("B", "channel"), ("C", "channel"), ("U", "template")):
         if key not in st:
             continue
@@ -257,6 +265,19 @@ def history_verify(r, api, st):
                 all(row.get("itemId") != item["id"] for row in c.deleted(api, kind)))
         r.check(f"purging deleted {kind} {key} again reports false (nothing was purged)",
                 not c.purge(api, kind, rows[0]["id"]))
+
+
+def check_json_list(r, api, label, path, query, class_name, fields, count):
+    """The web administrator reads the plugin's lists as JSON and takes the rows from under the class
+    name (makeApi in webadmin/web/schi-core.js). XStream sends one row as an object, several as an array."""
+    status, body = c.json_list(api, path, query)
+    holder = (body or {}).get("list")
+    rows = holder.get(class_name) if isinstance(holder, dict) else None
+    rows = [rows] if isinstance(rows, dict) else rows
+    ok = (status == 200 and isinstance(rows, list) and len(rows) == count
+          and all(all(field in row for field in fields) for row in rows))
+    r.check(f"{label} as JSON: {count} row(s) under {class_name}, each with {', '.join(fields)}", ok,
+            f"HTTP {status}: {str(body)[:200]}")
 
 
 def check_rows(r, db, dbname, expected):
@@ -352,9 +373,14 @@ def uninstall(r, engine, db, dbname, new_zip, **_):
     r.check("create channel Y", c.create_channel(api, gone, "SCH e2e Y", "to be deleted"))
     c.delete_channel(api, gone)
     r.check("channel X has 2 history rows", len(c.history_ids(api, "channel", cid)) == 2)
+    # Control for "no deleted channels" after the reinstall: Y's snapshot is there before the uninstall.
+    r.check("deleted channel Y is listed before the uninstall",
+            any(row.get("itemId") == gone for row in c.deleted(api, "channel")))
     tables = db.plugin_table_count(dbname)
     if tables is not None:
         r.check("the plugin's 4 tables exist", tables == 4, f"found {tables}")
+    else:
+        r.note("table counts", "not read for Derby (embedded in the engine); the API checks still run")
     # Control for the 'gone' checks below: the same calls must see the plugin while it is installed.
     r.check("the plugin is listed before the uninstall", c.plugin_installed(api))
     r.check("its extension folder exists before the uninstall", engine.extension_files(c.PLUGIN_PATH) is not None)
