@@ -73,6 +73,16 @@ jobs:
           FAILED=0
           check "pom.xml <revision>" "$(mvn -q -N "$HELP:evaluate" -Dexpression=revision -DforceStdout)"
           check "oie.json version" "$(jq -r .version oie.json)"
+          # The engine loads a plugin only on the exact version in plugin.xml's mirthVersion (the
+          # pom's mc.version), so the store listing must say exactly that version too.
+          MC_VERSION="$(mvn -q -N "$HELP:evaluate" -Dexpression=mc.version -DforceStdout)"
+          for field in minEngineVersion maxEngineVersion; do
+            got="$(jq -r ".$field" oie.json)"
+            if [ "$got" != "$MC_VERSION" ]; then
+              echo "::error::oie.json $field is '${got}', but the plugin is built for OIE ${MC_VERSION} (pom.xml mc.version), the only version the engine will load it on."
+              FAILED=1
+            fi
+          done
           if [ "$FAILED" -ne 0 ]; then
             echo "Set the version in every file listed above (RELEASING.md, step 1) and tag again."
             exit 1
