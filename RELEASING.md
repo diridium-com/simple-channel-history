@@ -7,12 +7,12 @@ Every release is signed. CI builds an unsigned draft, the signed build is made w
 
 ## 1. Bump the version
 
-Change all of these in the commit you tag. The release workflow fails, naming each file, if any of them does not match the tag:
+Change both of these in the commit you tag. The release workflow fails, naming each one, if either does not match the tag:
 
 - `<revision>` in the parent `pom.xml`
 - `version` in `oie.json`
-- `version` in `webadmin/plugin.json`
-- `version` in `webadmin/package.json`, and the two root entries in `webadmin/package-lock.json`
+
+Everything else takes its version from `<revision>` when the zip is built: `plugin.xml`, the jar names and `webadmin/plugin.json`. The release workflow checks the version inside the built zip as well. `oie.json` stays separate because the store tooling reads it straight from the repo at the tag.
 
 CI builds the committed files as they are, the same way the signed build does.
 

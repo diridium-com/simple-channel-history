@@ -73,11 +73,6 @@ jobs:
           FAILED=0
           check "pom.xml <revision>" "$(mvn -q -N "$HELP:evaluate" -Dexpression=revision -DforceStdout)"
           check "oie.json version" "$(jq -r .version oie.json)"
-          check "webadmin/plugin.json version" "$(jq -r .version webadmin/plugin.json)"
-          check "webadmin/package.json version" "$(jq -r .version webadmin/package.json)"
-          check "webadmin/package-lock.json version" "$(jq -r .version webadmin/package-lock.json)"
-          check "webadmin/package-lock.json packages[\"\"].version" \
-            "$(jq -r '.packages[""].version' webadmin/package-lock.json)"
           if [ "$FAILED" -ne 0 ]; then
             echo "Set the version in every file listed above (RELEASING.md, step 1) and tag again."
             exit 1
@@ -152,6 +147,20 @@ jobs:
             exit 1
           fi
           echo "surefire report files: $reports"
+
+      # plugin.xml and webadmin/plugin.json get their version from the pom when the zip is
+      # built. Check what actually went into the zip, so a broken filter can't ship a placeholder.
+      - name: Check the version inside the zip
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          ZIP="package/target/simple-channel-history-${VERSION}.zip"
+          XML="$(unzip -p "$ZIP" simple-channel-history/plugin.xml | sed -n 's:.*<pluginVersion>\(.*\)</pluginVersion>.*:\1:p')"
+          JSON="$(unzip -p "$ZIP" simple-channel-history/webadmin/plugin.json | jq -r .version)"
+          if [ "$XML" != "$VERSION" ] || [ "$JSON" != "$VERSION" ]; then
+            echo "::error::The zip has plugin.xml '${XML}' and webadmin/plugin.json '${JSON}', but the tag is ${VERSION}."
+            exit 1
+          fi
+          echo "plugin.xml and webadmin/plugin.json in the zip both say ${VERSION}"
 
       - name: Stage the release asset and checksum
         id: pkg

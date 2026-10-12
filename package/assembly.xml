@@ -25,11 +25,13 @@
     </fileSets>
     <!-- Web administrator UI: discovered by the OIE web admin at
          <extensions>/simple-channel-history/webadmin/plugin.json (built by the
-         frontend-maven-plugin into ../webadmin/web/plugin.js). -->
+         frontend-maven-plugin into ../webadmin/web/plugin.js). plugin.json is filtered
+         so its version comes from the pom's <revision>. -->
     <files>
         <file>
             <source>../webadmin/plugin.json</source>
             <outputDirectory>${packageName}/webadmin</outputDirectory>
+            <filtered>true</filtered>
         </file>
         <file>
             <source>../webadmin/web/plugin.js</source>
