@@ -4,6 +4,7 @@
 
 package com.diridium;
 
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -16,6 +17,7 @@ import javax.ws.rs.core.SecurityContext;
 import com.mirth.connect.client.core.ClientException;
 import com.mirth.connect.model.Channel;
 import com.mirth.connect.model.ChannelMetadata;
+import com.mirth.connect.model.ChannelTag;
 import com.mirth.connect.model.ServerEvent;
 import com.mirth.connect.model.ServerEvent.Level;
 import com.mirth.connect.model.ServerEvent.Outcome;
@@ -85,14 +87,6 @@ public class ChannelHistoryServlet extends MirthServlet implements ChannelHistor
     public boolean revertChannel(String channelId, String revision) throws ClientException {
         try {
             Channel channel = repo.getChannelAtRevision(channelId, revision);
-            ChannelMetadata metadata = channel.getExportData().getMetadata();
-            if(metadata == null) {
-                metadata = new ChannelMetadata();
-                channel.getExportData().setMetadata(metadata);
-            }
-            // without this the userId will be null and will result in a warning
-            // on the client when user tries to save the same channel after reverting
-            metadata.setUserId(context.getUserId());
 
             // Get original description from the revision we're reverting to
             String oldDesc = channel.getDescription();
@@ -132,6 +126,8 @@ public class ChannelHistoryServlet extends MirthServlet implements ChannelHistor
             newDesc.append(REVERT_HISTORY_END);
 
             channel.setDescription(newDesc.toString());
+            // Read just before the save, so a change made meanwhile (enable/disable, a tag edit) is kept.
+            keepCurrentSettings(channel, channelId);
             boolean result = channelController.updateChannel(channel, context, true, Calendar.getInstance());
             log.debug("reverted Channel {} to revision {}", channelId, revision);
 
@@ -146,6 +142,36 @@ public class ChannelHistoryServlet extends MirthServlet implements ChannelHistor
             log.warn("failed to revert Channel {} to revision {}", channelId, revision);
             throw new ClientException(e);
         }
+    }
+
+    /**
+     * A history row contains only the channel's source: the engine strips its settings and tags
+     * before the plugin's save hook runs. updateChannel stores whatever settings and tags arrive
+     * with the channel, so attach the current ones, as the channel editor does on every save.
+     * Otherwise a revert stores blank defaults: enabled, no pruning, and no tags.
+     */
+    private void keepCurrentSettings(Channel channel, String channelId) {
+        ConfigurationController configurationController = ConfigurationController.getInstance();
+
+        // getChannelMetadata() deserializes a fresh map on every call, so the channel's own metadata
+        // is reused as is: every setting in it, including any a later engine adds, stays unchanged.
+        ChannelMetadata metadata = configurationController.getChannelMetadata().get(channelId);
+        if (metadata == null) {
+            metadata = new ChannelMetadata(); // the engine treats missing metadata as enabled
+        }
+        // Stamped like an editor save, so another user's open editor sees the channel changed.
+        metadata.setLastModified(Calendar.getInstance());
+        // Recorded as saved by the reverting user, as an editor save is.
+        metadata.setUserId(context.getUserId());
+        channel.getExportData().setMetadata(metadata);
+
+        List<ChannelTag> tags = new ArrayList<>();
+        for (ChannelTag tag : configurationController.getChannelTags()) {
+            if (tag.getChannelIds().contains(channelId)) {
+                tags.add(tag);
+            }
+        }
+        channel.getExportData().setChannelTags(tags);
     }
 
     @Override

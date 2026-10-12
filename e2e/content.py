@@ -63,12 +63,54 @@ def _rows(root):
 
 # ---------- channels
 
-def channel_xml(cid, name, description):
+def channel_xml(cid, name, description, settings=None):
+    """The channel fixture. settings, when given, is sent the way the channel editor sends it, in
+    exportData: {"enabled": bool, "prune_days": (metadata, content) or None, "tags": [(tag id, name)]}."""
     root = ET.parse(CHANNEL_FIXTURE).getroot()
     _set(root, "id", cid)
     _set(root, "name", name)
     _set(root, "description", description)
+    if settings is not None:
+        export = root.find("exportData")
+        metadata = export.find("metadata")
+        _set(metadata, "enabled", "true" if settings["enabled"] else "false")
+        old = metadata.find("pruningSettings")
+        if old is not None:
+            metadata.remove(old)
+        if settings["prune_days"] is not None:          # None: no pruning settings at all
+            pruning = ET.SubElement(metadata, "pruningSettings")
+            for tag, value in (("pruneMetaDataDays", settings["prune_days"][0]), ("pruneContentDays", settings["prune_days"][1]),
+                               ("archiveEnabled", "false"), ("pruneErroredMessages", "false")):
+                ET.SubElement(pruning, tag).text = str(value)
+        old = export.find("channelTags")
+        if old is not None:
+            export.remove(old)
+        tags = ET.SubElement(export, "channelTags")
+        for tag_id, tag_name in settings["tags"]:
+            tag = ET.SubElement(tags, "channelTag")
+            ET.SubElement(tag, "id").text = tag_id
+            ET.SubElement(tag, "name").text = tag_name
+            ET.SubElement(ET.SubElement(tag, "channelIds"), "string").text = cid
+            color = ET.SubElement(tag, "backgroundColor")
+            for part, value in (("red", 40), ("green", 120), ("blue", 200), ("alpha", 255)):
+                ET.SubElement(color, part).text = str(value)
     return _xml(root)
+
+
+def channel_settings(api, cid):
+    """The channel's settings and tags as the engine holds them:
+    (enabled, (metadata days, content days, archive enabled, prune errored) or None, [tag names])."""
+    enabled, prune = None, None
+    for entry in api.xml("GET", "/server/channelMetadata"):
+        if entry.findtext("string") == cid:
+            metadata = [child for child in entry if child.tag != "string"][0]
+            pruning = metadata.find("pruningSettings")
+            enabled = metadata.findtext("enabled")
+            prune = (tuple(pruning.findtext(f) for f in ("pruneMetaDataDays", "pruneContentDays", "archiveEnabled",
+                                                          "pruneErroredMessages")) if pruning is not None else None)
+    tags = sorted(tag.findtext("name") for tag in api.xml("GET", "/server/channelTags")
+                  if cid in [s.text for s in tag.iter("string")])
+    return enabled, prune, tags
 
 
 def _boolean_json(status, text):
@@ -76,13 +118,13 @@ def _boolean_json(status, text):
     return status == 200 and text.replace(" ", "") == '{"boolean":true}'
 
 
-def create_channel(api, cid, name, description):
-    return _boolean_json(*api.request("POST", "/channels", channel_xml(cid, name, description),
+def create_channel(api, cid, name, description, settings=None):
+    return _boolean_json(*api.request("POST", "/channels", channel_xml(cid, name, description, settings),
                                       accept="application/json"))
 
 
-def update_channel(api, cid, name, description):
-    return _boolean_json(*api.request("PUT", f"/channels/{cid}", channel_xml(cid, name, description),
+def update_channel(api, cid, name, description, settings=None):
+    return _boolean_json(*api.request("PUT", f"/channels/{cid}", channel_xml(cid, name, description, settings),
                                       accept="application/json", query={"override": "true"}))
 
 

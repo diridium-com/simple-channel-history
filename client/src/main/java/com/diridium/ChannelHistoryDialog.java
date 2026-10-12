@@ -278,8 +278,10 @@ public class ChannelHistoryDialog extends JDialog {
         RevisionInfo targetRevision = model.getRevisionAt(row);
 
         int confirm = JOptionPane.showConfirmDialog(this,
-                "Are you sure you want to revert to revision " + targetRevision.getShortHash() + "?\n" +
-                "This will overwrite the current channel.",
+                "Revert to revision " + targetRevision.getShortHash() + "?\n" +
+                "This restores the channel as saved in that revision: connectors, scripts, filters, transformers,\n" +
+                "and channel properties such as initial state and message storage.\n" +
+                "These stay as they are now: enabled or disabled, message pruning, and tags.",
                 "Confirm Revert",
                 JOptionPane.YES_NO_OPTION,
                 JOptionPane.WARNING_MESSAGE);
