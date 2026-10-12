@@ -275,6 +275,7 @@ def upgrade(r, engine, db, dbname, new_zip, old_zip, **_):
             any(row.get("itemId") == gone for row in c.deleted(api, "channel")))
     r.check("after the upgrade: a new save is recorded", c.update_channel(api, cid, "SCH e2e UA", m["v3"])
             and len(c.history_ids(api, "channel", cid)) == 3)
+    check_tables_created_once(r, engine)
     check_logs(r, engine)
 
 

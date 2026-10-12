@@ -37,9 +37,10 @@ public class HistoryMigrator extends Migrator {
 
     /**
      * The engine runs every plugin migrator on every startup, so a script runs only when its
-     * tables are missing. Derby and Oracle have no CREATE TABLE IF NOT EXISTS, and letting the
-     * create fail logged a warning with a stack trace on every restart (#27). Failures are
-     * logged at ERROR because stock OIE logs nothing below it.
+     * tables are missing. Derby has no CREATE TABLE IF NOT EXISTS and Oracle only has it from
+     * 23ai, so their scripts can't use it, and letting the create fail logged a warning with a
+     * stack trace on every restart (#27). Failures are logged at ERROR because stock OIE logs
+     * nothing below it.
      *
      * This only creates tables that are missing. A change to an existing table (a new column,
      * a type change) never reaches an upgraded install this way: it needs a stored schema
@@ -85,12 +86,12 @@ public class HistoryMigrator extends Migrator {
     }
 
     // jTDS 1.3.1 (the engine's default SQL Server driver) implements Connection.getSchema() as a stub
-    // that throws AbstractMethodError. A null schema still finds the table, since the catalog narrows
-    // the search.
+    // that throws AbstractMethodError; a driver that doesn't support it otherwise throws SQLException.
+    // A null schema still finds the table, since the catalog narrows the search.
     private static String currentSchema(Connection connection) {
         try {
             return connection.getSchema();
-        } catch (Throwable t) {
+        } catch (AbstractMethodError | SQLException e) {
             return null;
         }
     }
