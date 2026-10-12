@@ -73,7 +73,10 @@ class Database:
 
     def _ready(self):
         if self.server == "postgres":
-            return docker("exec", self.container, "pg_isready", "-U", "oie", "-d", "postgres", check=False).returncode == 0
+            # Over TCP: the image first runs a temporary init server on the Unix socket only, and
+            # shuts it down before starting the real one, so a socket check can answer too early.
+            return docker("exec", self.container, "pg_isready", "-h", "127.0.0.1", "-U", "oie", "-d", "postgres",
+                          check=False).returncode == 0
         if self.server == "mysql":
             # The image runs a temporary server on port 0 before the real one on 3306.
             logs = docker("logs", self.container, check=False)
