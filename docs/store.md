@@ -32,7 +32,8 @@ PostgreSQL, MySQL, Oracle, SQL Server, and Derby.
 
 ## Compatibility
 
-Requires Open Integration Engine **4.6.0+**. The web administrator UI requires a web
+Requires Open Integration Engine **4.6.0**. The engine only loads a plugin built for its exact
+version, so each OIE release gets a matching plugin release. The web administrator UI requires a web
 admin build that provides the channel/code-template action extension points and the
 Monaco-backed diff viewer (4.6+). A restart is required after install. See the
 [README](https://github.com/diridium-com/simple-channel-history#readme) for details.

@@ -14,6 +14,8 @@ Change both of these in the commit you tag. The release workflow fails, naming e
 
 Everything else takes its version from `<revision>` when the zip is built: `plugin.xml`, the jar names and `webadmin/plugin.json`. The release workflow checks the version inside the built zip as well. `oie.json` stays separate because the store tooling reads it straight from the repo at the tag.
 
+When the engine version (`mc.version` in `pom.xml`) changes, set `minEngineVersion` and `maxEngineVersion` in `oie.json` to it as well. The engine loads a plugin only on the exact version it was built for, and the release workflow fails if `oie.json` says otherwise.
+
 CI builds the committed files as they are, the same way the signed build does.
 
 ## 2. Tag
