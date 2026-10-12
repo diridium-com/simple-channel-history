@@ -65,6 +65,8 @@ public class CodeTemplateHistoryDialog extends JDialog {
 
         setSize(700, 400);
         setLocationRelativeTo(parent);
+        // The title-bar close disposes the dialog too, as Close and Escape do.
+        setDefaultCloseOperation(DISPOSE_ON_CLOSE);
 
         // Escape key closes dialog
         getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(
@@ -231,8 +233,7 @@ public class CodeTemplateHistoryDialog extends JDialog {
             String rightLabel = String.format("New - %s (user: %s, time: %s)", newer.getShortHash(), newer.getCommitterName(), sdf.format(new Date(newer.getTime())));
 
             DiffWindow dw = DiffWindow.create(this, "Code Template Diff - " + codeTemplateName, leftLabel, rightLabel, left, right);
-            dw.setSize(PlatformUI.MIRTH_FRAME.getWidth() - 10, PlatformUI.MIRTH_FRAME.getHeight() - 10);
-            dw.setVisible(true);
+            DiffWindow.showOverAdministrator(dw);
         } catch (Exception e) {
             PlatformUI.MIRTH_FRAME.alertThrowable(PlatformUI.MIRTH_FRAME, e);
         }

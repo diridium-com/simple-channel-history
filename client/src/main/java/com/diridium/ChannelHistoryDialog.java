@@ -65,6 +65,8 @@ public class ChannelHistoryDialog extends JDialog {
 
         setSize(700, 400);
         setLocationRelativeTo(parent);
+        // The title-bar close disposes the dialog too, as Close and Escape do.
+        setDefaultCloseOperation(DISPOSE_ON_CLOSE);
 
         // Escape key closes dialog
         getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(
@@ -235,14 +237,12 @@ public class ChannelHistoryDialog extends JDialog {
                 ChannelXmlDecomposer.DecomposeResult rightResult = ChannelXmlDecomposer.decomposeWithNames(right);
                 DecomposedDiffWindow dw = DecomposedDiffWindow.create(this, "Channel Diff - " + channelName,
                         leftLabel, rightLabel, leftResult, rightResult, left, right);
-                dw.setSize(PlatformUI.MIRTH_FRAME.getWidth() - 10, PlatformUI.MIRTH_FRAME.getHeight() - 10);
-                dw.setVisible(true);
+                DiffWindow.showOverAdministrator(dw);
             } catch (Exception decompositionEx) {
                 // Fallback to original monolithic DiffWindow — log so failures aren't invisible
                 log.warn("Channel decomposition failed, falling back to raw diff: {}", decompositionEx.getMessage(), decompositionEx);
                 DiffWindow dw = DiffWindow.create(this, "Channel Diff - " + channelName, leftLabel, rightLabel, left, right);
-                dw.setSize(PlatformUI.MIRTH_FRAME.getWidth() - 10, PlatformUI.MIRTH_FRAME.getHeight() - 10);
-                dw.setVisible(true);
+                DiffWindow.showOverAdministrator(dw);
             }
         } catch (Exception e) {
             PlatformUI.MIRTH_FRAME.alertThrowable(PlatformUI.MIRTH_FRAME, e);

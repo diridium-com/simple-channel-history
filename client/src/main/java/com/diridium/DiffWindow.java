@@ -8,6 +8,7 @@ import java.awt.BorderLayout;
 import java.awt.Dialog;
 import java.awt.Font;
 import java.awt.GridLayout;
+import java.awt.Window;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
 
@@ -17,6 +18,8 @@ import javax.swing.JDialog;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.KeyStroke;
+
+import com.mirth.connect.client.ui.PlatformUI;
 
 /**
  * The main window for showing diff.
@@ -28,7 +31,7 @@ public class DiffWindow extends JDialog {
     private final String rightLabel;
 
     private DiffWindow(Dialog parent, String title, String leftLabel, String rightLabel) {
-        super(parent, title, true); // modal dialog
+        super(ownerOrAdministrator(parent), title, ModalityType.APPLICATION_MODAL); // modal dialog
         this.leftLabel = leftLabel;
         this.rightLabel = rightLabel;
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
@@ -42,6 +45,21 @@ public class DiffWindow extends JDialog {
                 dispose();
             }
         });
+    }
+
+    /** A window with no dialog to belong to belongs to the Administrator, so it stays with it. */
+    static Window ownerOrAdministrator(Window parent) {
+        return parent != null ? parent : PlatformUI.MIRTH_FRAME;
+    }
+
+    /**
+     * Shows a diff window the size of the Administrator and over it, so it opens on the
+     * Administrator's monitor rather than at the top left of the main screen.
+     */
+    static void showOverAdministrator(JDialog window) {
+        window.setSize(PlatformUI.MIRTH_FRAME.getWidth() - 10, PlatformUI.MIRTH_FRAME.getHeight() - 10);
+        window.setLocationRelativeTo(PlatformUI.MIRTH_FRAME);
+        window.setVisible(true);
     }
 
     public static DiffWindow create(Dialog parent, String title, String leftLabel, String rightLabel,

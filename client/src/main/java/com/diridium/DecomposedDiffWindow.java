@@ -46,7 +46,7 @@ public class DecomposedDiffWindow extends JDialog {
                                   Map<String, String> rightGroupDisplayNames,
                                   String leftRawXml, String rightRawXml,
                                   boolean viewOnly) {
-        super(parent, title, true);
+        super(DiffWindow.ownerOrAdministrator(parent), title, ModalityType.APPLICATION_MODAL);
         this.leftComponents = leftComponents;
         this.rightComponents = rightComponents;
         this.leftGroupDisplayNames = leftGroupDisplayNames;
