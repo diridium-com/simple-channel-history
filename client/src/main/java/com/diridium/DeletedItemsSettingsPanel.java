@@ -9,6 +9,9 @@ import java.awt.FlowLayout;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.text.SimpleDateFormat;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
@@ -37,7 +40,6 @@ import com.mirth.connect.client.ui.AbstractSettingsPanel;
 import com.mirth.connect.client.ui.PlatformUI;
 import com.mirth.connect.client.ui.UIConstants;
 import com.mirth.connect.client.ui.components.MirthTable;
-import com.mirth.connect.model.converters.ObjectXMLSerializer;
 
 /**
  * Settings panel for viewing and managing deleted channel/code template snapshots.
@@ -52,7 +54,8 @@ public class DeletedItemsSettingsPanel extends AbstractSettingsPanel {
     private static final String FILTER_CHANNELS = "Channels";
     private static final String FILTER_CODE_TEMPLATES = "Code Templates";
 
-    private ChannelHistoryServletInterface servlet;
+    // Set on the refresh worker's thread and read on the UI thread.
+    private volatile ChannelHistoryServletInterface servlet;
     private MirthTable table;
     private DeletedItemTableModel model;
     private List<DeletedItemInfo> allItems = Collections.emptyList();
@@ -68,10 +71,7 @@ public class DeletedItemsSettingsPanel extends AbstractSettingsPanel {
 
     public DeletedItemsSettingsPanel(String tabName) {
         super(tabName);
-        ObjectXMLSerializer.getInstance().allowTypes(
-                Collections.emptyList(),
-                Collections.singletonList(DeletedItemInfo.class.getPackage().getName() + ".**"),
-                Collections.emptyList());
+        AllowedTypes.register();
         initComponents();
     }
 
@@ -438,7 +438,8 @@ public class DeletedItemsSettingsPanel extends AbstractSettingsPanel {
 
     static class DeletedItemTableModel extends AbstractTableModel {
 
-        private static final SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+        // DateTimeFormatter is thread-safe, unlike the SimpleDateFormat a shared static would otherwise be.
+        private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
         private final List<DeletedItemInfo> items;
 
@@ -469,7 +470,7 @@ public class DeletedItemsSettingsPanel extends AbstractSettingsPanel {
                 case 1 -> info.getName();
                 case 2 -> info.getItemId();
                 case 3 -> info.getDeletedBy();
-                case 4 -> df.format(new Date(info.getDateDeleted()));
+                case 4 -> TIME_FORMAT.format(Instant.ofEpochMilli(info.getDateDeleted()).atZone(ZoneId.systemDefault()));
                 default -> throw new IllegalArgumentException("unknown column " + columnIndex);
             };
         }

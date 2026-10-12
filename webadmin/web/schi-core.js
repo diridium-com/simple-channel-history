@@ -13,11 +13,10 @@ const EXT = '/extensions/simple-channel-history';
 /* ---- REST client (the 14 servlet endpoints) -------------------------------- */
 
 export function makeApi(api) {
-    // Lists come back XStream-wrapped; asList unwraps { list: { <FQCN>: [...] } }.
-    const list = (v) => api.asList(v, 'com.diridium.RevisionInfo').length
-        ? api.asList(v, 'com.diridium.RevisionInfo') : api.asList(v, 'revisionInfo');
-    const dlist = (v) => api.asList(v, 'com.diridium.DeletedItemInfo').length
-        ? api.asList(v, 'com.diridium.DeletedItemInfo') : api.asList(v, 'deletedItemInfo');
+    // Lists come back XStream-wrapped; asList unwraps { list: { <FQCN>: [...] } }. The engine always
+    // uses the full class name.
+    const list = (v) => api.asList(v, 'com.diridium.RevisionInfo');
+    const dlist = (v) => api.asList(v, 'com.diridium.DeletedItemInfo');
     return {
         // Channels
         getHistory: async (channelId) => list(await api.get(`${EXT}/history`, { channelId })),
@@ -107,11 +106,11 @@ function prettyNode(el, indent = '') {
     return `${indent}<${el.tagName}${attrs}>\n${inner}\n${indent}</${el.tagName}>`;
 }
 
-function put(components, key, displayName, content, category, parentGroup) {
-    components.set(key, { key, displayName, content, category, parentGroup });
+function put(components, key, displayName, content, parentGroup) {
+    components.set(key, { key, displayName, content, parentGroup });
 }
 
-function extractSteps(components, connectorEl, connectorGroup, elementName, displayName, category) {
+function extractSteps(components, connectorEl, connectorGroup, elementName, displayName) {
     const sub = directChild(connectorEl, elementName);
     if (!sub) return;
     const elements = directChild(sub, 'elements');
@@ -124,7 +123,7 @@ function extractSteps(components, connectorEl, connectorGroup, elementName, disp
         const seq = seqText != null ? seqText : String(i);
         let name = directChildText(step, 'name');
         if (!name) name = stepTypeName(step.tagName);
-        put(components, `${subGroupKey}/Step ${seq}`, `Step ${seq}: ${name}`, prettyNode(step), category, subGroupKey);
+        put(components, `${subGroupKey}/Step ${seq}`, `Step ${seq}: ${name}`, prettyNode(step), subGroupKey);
         elements.removeChild(step);
     });
 }
@@ -133,19 +132,19 @@ function extractConnector(components, connectorEl, group) {
     const props = directChild(connectorEl, 'properties');
     if (props) {
         const script = directChild(props, 'script');
-        if (script) { put(components, `${group}/Script`, 'Script', script.textContent, 'CONNECTOR_SCRIPT', group); props.removeChild(script); }
+        if (script) { put(components, `${group}/Script`, 'Script', script.textContent, group); props.removeChild(script); }
         const pluginProps = directChild(props, 'pluginProperties');
         if (pluginProps) {
             for (const plugin of directChildren(pluginProps)) {
                 const pname = stepTypeName(plugin.tagName);
-                put(components, `${group}/Plugin: ${pname}`, `Plugin: ${pname}`, prettyNode(plugin), 'CONNECTOR_PLUGIN', group);
+                put(components, `${group}/Plugin: ${pname}`, `Plugin: ${pname}`, prettyNode(plugin), group);
             }
             for (const plugin of directChildren(pluginProps)) pluginProps.removeChild(plugin);
         }
     }
-    extractSteps(components, connectorEl, group, 'filter', 'Filter', 'FILTER');
-    extractSteps(components, connectorEl, group, 'transformer', 'Transformer', 'TRANSFORMER');
-    extractSteps(components, connectorEl, group, 'responseTransformer', 'Response Transformer', 'RESPONSE_TRANSFORMER');
+    extractSteps(components, connectorEl, group, 'filter', 'Filter');
+    extractSteps(components, connectorEl, group, 'transformer', 'Transformer');
+    extractSteps(components, connectorEl, group, 'responseTransformer', 'Response Transformer');
 }
 
 /* Returns { components: Map<key, comp>, groupDisplayNames: Map<group,name> } or
@@ -161,14 +160,14 @@ export function decomposeChannel(channelXml) {
     for (const [tag, name] of [['preprocessingScript', 'Preprocessing Script'], ['postprocessingScript', 'Postprocessing Script'],
         ['deployScript', 'Deploy Script'], ['undeployScript', 'Undeploy Script']]) {
         const node = directChild(root, tag);
-        if (node) { put(components, `Channel Scripts/${name}`, name, node.textContent, 'CHANNEL_SCRIPT', 'Channel Scripts'); root.removeChild(node); }
+        if (node) { put(components, `Channel Scripts/${name}`, name, node.textContent, 'Channel Scripts'); root.removeChild(node); }
     }
 
     // Source connector
     const source = directChild(root, 'sourceConnector');
     if (source) {
         extractConnector(components, source, 'Source Connector');
-        put(components, 'Source Connector/Configuration', 'Configuration', prettyNode(source), 'CONNECTOR_CONFIGURATION', 'Source Connector');
+        put(components, 'Source Connector/Configuration', 'Configuration', prettyNode(source), 'Source Connector');
         root.removeChild(source);
     }
 
@@ -188,15 +187,15 @@ export function decomposeChannel(channelXml) {
         for (const connector of connectors) {
             const metaDataId = directChildText(connector, 'metaDataId');
             const group = `Destination [${metaDataId}]`;
-            put(components, `${group}/Configuration`, 'Configuration', prettyNode(connector), 'CONNECTOR_CONFIGURATION', group);
+            put(components, `${group}/Configuration`, 'Configuration', prettyNode(connector), group);
         }
         root.removeChild(destWrapper);
     }
 
     // Channel Properties = the remainder; ordered first, then Destination Order, then the rest.
     const ordered = new Map();
-    put(ordered, 'Channel Properties', 'Channel Properties', prettyNode(root), 'CHANNEL_PROPERTIES', 'Channel Properties');
-    if (destOrder.length) put(ordered, 'Destination Order', 'Destination Order', destOrder.join('\n'), 'CHANNEL_PROPERTIES', 'Destination Order');
+    put(ordered, 'Channel Properties', 'Channel Properties', prettyNode(root), 'Channel Properties');
+    if (destOrder.length) put(ordered, 'Destination Order', 'Destination Order', destOrder.join('\n'), 'Destination Order');
     for (const [k, v] of components) ordered.set(k, v);
     return { components: ordered, groupDisplayNames };
 }

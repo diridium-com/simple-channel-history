@@ -59,10 +59,6 @@ public class ChannelXmlDecomposer {
         return new DecomposeResult(components, groupDisplayNames);
     }
 
-    public static Map<String, DecomposedComponent> decompose(String channelXml) throws Exception {
-        return decomposeInternal(channelXml, null);
-    }
-
     private static Map<String, DecomposedComponent> decomposeInternal(String channelXml,
             Map<String, String> groupDisplayNames) throws Exception {
         DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
@@ -91,15 +87,15 @@ public class ChannelXmlDecomposer {
             extractConnectorScript(xpath, components, (Element) sourceConnector, srcGroup);
             extractPluginProperties(xpath, components, (Element) sourceConnector, srcGroup);
             extractStepsFromSubElement(xpath, components, (Element) sourceConnector, srcGroup,
-                    "filter", "Filter", DecomposedComponent.Category.FILTER);
+                    "filter", "Filter");
             extractStepsFromSubElement(xpath, components, (Element) sourceConnector, srcGroup,
-                    "transformer", "Transformer", DecomposedComponent.Category.TRANSFORMER);
+                    "transformer", "Transformer");
 
             // Serialize remaining source connector as Configuration
             String srcConfigXml = serializeNode(sourceConnector);
             String srcKey = srcGroup + "/Configuration";
             components.put(srcKey, new DecomposedComponent(srcKey, "Configuration", srcConfigXml,
-                    DecomposedComponent.Category.CONNECTOR_CONFIGURATION, srcGroup));
+                    srcGroup));
             sourceConnector.getParentNode().removeChild(sourceConnector);
         }
 
@@ -129,11 +125,11 @@ public class ChannelXmlDecomposer {
             extractConnectorScript(xpath, components, connector, groupName);
             extractPluginProperties(xpath, components, connector, groupName);
             extractStepsFromSubElement(xpath, components, connector, groupName,
-                    "filter", "Filter", DecomposedComponent.Category.FILTER);
+                    "filter", "Filter");
             extractStepsFromSubElement(xpath, components, connector, groupName,
-                    "transformer", "Transformer", DecomposedComponent.Category.TRANSFORMER);
+                    "transformer", "Transformer");
             extractStepsFromSubElement(xpath, components, connector, groupName,
-                    "responseTransformer", "Response Transformer", DecomposedComponent.Category.RESPONSE_TRANSFORMER);
+                    "responseTransformer", "Response Transformer");
         }
 
         // Extract each destination connector configuration (after sub-elements removed)
@@ -144,7 +140,7 @@ public class ChannelXmlDecomposer {
                 String configXml = serializeNode(connector);
                 String configKey = groupName + "/Configuration";
                 components.put(configKey, new DecomposedComponent(configKey, "Configuration", configXml,
-                        DecomposedComponent.Category.CONNECTOR_CONFIGURATION, groupName));
+                        groupName));
                 connector.getParentNode().removeChild(connector);
             }
         }
@@ -162,12 +158,12 @@ public class ChannelXmlDecomposer {
         // Reorder so Channel Properties and Destination Order appear first in the tree
         Map<String, DecomposedComponent> ordered = new LinkedHashMap<>();
         ordered.put(key, new DecomposedComponent(key, "Channel Properties", remainderXml,
-                DecomposedComponent.Category.CHANNEL_PROPERTIES, key));
+                key));
         if (!destOrderBuilder.isEmpty()) {
             String destOrderKey = "Destination Order";
             ordered.put(destOrderKey, new DecomposedComponent(destOrderKey, "Destination Order",
                     destOrderBuilder.toString(),
-                    DecomposedComponent.Category.CHANNEL_PROPERTIES, destOrderKey));
+                    destOrderKey));
         }
         ordered.putAll(components);
 
@@ -183,7 +179,7 @@ public class ChannelXmlDecomposer {
             String group = "Channel Scripts";
             String compKey = group + "/" + displayName;
             components.put(compKey, new DecomposedComponent(compKey, displayName, content,
-                    DecomposedComponent.Category.CHANNEL_SCRIPT, group));
+                    group));
             node.getParentNode().removeChild(node);
         }
     }
@@ -196,7 +192,7 @@ public class ChannelXmlDecomposer {
             String content = node.getTextContent();
             String compKey = groupName + "/Script";
             components.put(compKey, new DecomposedComponent(compKey, "Script", content,
-                    DecomposedComponent.Category.CONNECTOR_SCRIPT, groupName));
+                    groupName));
             node.getParentNode().removeChild(node);
         }
     }
@@ -222,7 +218,7 @@ public class ChannelXmlDecomposer {
             String compKey = groupName + "/Plugin: " + pluginName;
             String content = serializeNode(plugin);
             components.put(compKey, new DecomposedComponent(compKey, "Plugin: " + pluginName, content,
-                    DecomposedComponent.Category.CONNECTOR_PLUGIN, groupName));
+                    groupName));
             pluginProps.removeChild(plugin);
         }
     }
@@ -230,8 +226,7 @@ public class ChannelXmlDecomposer {
     private static void extractStepsFromSubElement(XPath xpath,
             Map<String, DecomposedComponent> components,
             Element connector, String connectorGroup,
-            String elementName, String displayName,
-            DecomposedComponent.Category category) throws Exception {
+            String elementName, String displayName) throws Exception {
         Node node = (Node) xpath.evaluate(elementName, connector, XPathConstants.NODE);
         if (node == null) {
             return;
@@ -276,7 +271,7 @@ public class ChannelXmlDecomposer {
 
             String stepContent = serializeNode(step);
             components.put(stepKey, new DecomposedComponent(stepKey, stepDisplayName, stepContent,
-                    category, subGroupKey));
+                    subGroupKey));
 
             // Remove the step from the DOM
             elementsNode.removeChild(step);

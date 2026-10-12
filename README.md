@@ -51,7 +51,7 @@ Requires Java 17+ and OIE libraries in your Maven repository (local or remote).
 ./scripts/install-engine-jars.sh
 ```
 
-The script installs the 12 engine jars this plugin builds against (`mirth-server`, `donkey-server`, `mirth-client-core`, `mirth-client`, plus 8 connector/plugin shared jars) into your local Maven repository, taken from the published OIE release matching the POM's `mc.version` and checked against that release's `sha256sums`. Run it once per engine version.
+The script installs the 4 engine jars this plugin builds against (`mirth-server`, `donkey-server`, `mirth-client-core` and `mirth-client`) into your local Maven repository, taken from the published OIE release matching the POM's `mc.version` and checked against that release's `sha256sums`. Run it once per engine version.
 
 ### Development Build (unsigned)
 

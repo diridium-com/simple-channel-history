@@ -5,28 +5,15 @@ package com.diridium;
 
 public class DecomposedComponent {
 
-    public enum Category {
-        CHANNEL_SCRIPT,
-        CONNECTOR_CONFIGURATION,
-        CONNECTOR_SCRIPT,
-        CONNECTOR_PLUGIN,
-        FILTER,
-        TRANSFORMER,
-        RESPONSE_TRANSFORMER,
-        CHANNEL_PROPERTIES
-    }
-
     private final String key;
     private final String displayName;
     private final String content;
-    private final Category category;
     private final String parentGroup;
 
-    public DecomposedComponent(String key, String displayName, String content, Category category, String parentGroup) {
+    public DecomposedComponent(String key, String displayName, String content, String parentGroup) {
         this.key = key;
         this.displayName = displayName;
         this.content = content;
-        this.category = category;
         this.parentGroup = parentGroup;
     }
 
@@ -40,10 +27,6 @@ public class DecomposedComponent {
 
     public String getContent() {
         return content;
-    }
-
-    public Category getCategory() {
-        return category;
     }
 
     public String getParentGroup() {

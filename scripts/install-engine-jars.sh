@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MPL-2.0
 # Copyright (c) 2025-2026 Diridium Technologies Inc.
 #
-# Installs the 12 OIE engine jars this plugin builds against into the local
+# Installs the 4 OIE engine jars this plugin builds against into the local
 # Maven repository, taken from the published OIE distribution for the POM's
 # mc.version. CI builds from the same tarball (.github/workflows/build.yml).
 # Run it once per engine version.
@@ -61,14 +61,6 @@ JARS=(
     "com.mirth.connect:donkey-server:oie/server-lib/donkey/donkey-server.jar"
     "com.mirth.connect:mirth-client-core:oie/server-lib/mirth-client-core.jar"
     "com.mirth.connect:mirth-client:oie/client-lib/mirth-client.jar"
-    "com.mirth.connect.connectors:vm-shared:oie/extensions/vm/vm-shared.jar"
-    "com.mirth.connect.connectors:js-shared:oie/extensions/js/js-shared.jar"
-    "com.mirth.connect.connectors:tcp-shared:oie/extensions/tcp/tcp-shared.jar"
-    "com.mirth.connect.plugins:mllpmode-shared:oie/extensions/mllpmode/mllpmode-shared.jar"
-    "com.mirth.connect.plugins:http-shared:oie/extensions/http/http-shared.jar"
-    "com.mirth.connect.plugins:javascriptstep-shared:oie/extensions/javascriptstep/javascriptstep-shared.jar"
-    "com.mirth.connect.plugins.datatypes:datatype-raw-shared:oie/extensions/datatype-raw/datatype-raw-shared.jar"
-    "com.mirth.connect.plugins.datatypes:datatype-hl7v2-shared:oie/extensions/datatype-hl7v2/datatype-hl7v2-shared.jar"
 )
 
 members=()

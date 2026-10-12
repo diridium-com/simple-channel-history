@@ -19,7 +19,6 @@
 
     <properties>
         <swingx-core.version>1.6.2-2</swingx-core.version>
-        <joda-time.version>2.10.10</joda-time.version>
     </properties>
 
     <dependencies>
@@ -44,15 +43,9 @@
             <scope>provided</scope>
         </dependency>
         <dependency>
-            <groupId>joda-time</groupId>
-            <artifactId>joda-time</artifactId>
-            <version>${joda-time.version}</version>
-            <scope>provided</scope>
-        </dependency>
-        <dependency>
             <groupId>io.github.java-diff-utils</groupId>
             <artifactId>java-diff-utils</artifactId>
-            <version>4.12</version>
+            <version>${java-diff-utils.version}</version>
         </dependency>
     </dependencies>
 </project>

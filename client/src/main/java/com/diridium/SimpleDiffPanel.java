@@ -11,9 +11,9 @@ import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
-import java.awt.Rectangle;
 import java.awt.event.AdjustmentEvent;
 import java.awt.event.AdjustmentListener;
+import java.awt.geom.Rectangle2D;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -138,7 +138,6 @@ public class SimpleDiffPanel extends JPanel {
         return pane;
     }
 
-    @SuppressWarnings("deprecation")
     private static class DiffTextPane extends JTextPane {
         private final List<int[]> lineOffsets = new ArrayList<>();
         private final List<Color> lineColors = new ArrayList<>();
@@ -176,10 +175,10 @@ public class SimpleDiffPanel extends JPanel {
                 }
                 int[] offsets = lineOffsets.get(i);
                 try {
-                    Rectangle r = modelToView(offsets[0]);
+                    Rectangle2D r = modelToView2D(offsets[0]);
                     if (r != null) {
                         g.setColor(color);
-                        g.fillRect(0, r.y, getWidth(), r.height);
+                        g.fillRect(0, (int) r.getY(), getWidth(), (int) Math.ceil(r.getHeight()));
                     }
                 } catch (BadLocationException e) {
                     // skip

@@ -13,7 +13,6 @@ certchain.pem
 
 # Web administrator UI build
 webadmin/node_modules/
-node/
 webadmin/web/plugin.js
 
 # End-to-end tests (e2e/)

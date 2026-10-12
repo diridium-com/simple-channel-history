@@ -9,8 +9,6 @@ import com.mirth.connect.model.codetemplates.CodeTemplate;
 import com.mirth.connect.model.codetemplates.CodeTemplateLibrary;
 import com.mirth.connect.model.converters.ObjectXMLSerializer;
 import com.mirth.connect.plugins.CodeTemplateServerPlugin;
-import com.mirth.connect.server.controllers.CodeTemplateController;
-import com.mirth.connect.server.controllers.ControllerFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,18 +41,7 @@ public class CodeTemplateVersionController implements CodeTemplateServerPlugin {
 
     @Override
     public void remove(CodeTemplate ct, ServerEventContext sec) {
-        // Mirth passes a CodeTemplate with only the ID set; look up the full object
-        if (ct.getName() == null) {
-            try {
-                CodeTemplateController ctc = ControllerFactory.getFactory().createCodeTemplateController();
-                CodeTemplate fullCt = ctc.getCodeTemplateById(ct.getId());
-                if (fullCt != null) {
-                    ct = fullCt;
-                }
-            } catch (Exception e) {
-                log.warn("Could not look up code template {} for delete snapshot", ct.getId(), e);
-            }
-        }
+        // The engine passes the full template: removeCodeTemplate looks it up before deleting the row.
         repo.saveDeletedCodeTemplate(ct, sec.getUserId());
         repo.deleteCodeTemplateHistory(ct.getId());
     }
