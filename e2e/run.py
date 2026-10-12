@@ -63,12 +63,10 @@ def main():
     parser.add_argument("--tarball", required=True, help="the OIE distribution, oie_unix_<version>.tar.gz")
     parser.add_argument("--work", required=True, help="a directory that does not exist yet")
     parser.add_argument("--java-home", default=os.environ.get("JAVA_HOME"))
-    parser.add_argument("--scenarios", default="all", help="comma separated: fresh, upgrade-<version>, uninstall")
+    parser.add_argument("--scenarios", default="all", help="comma separated: fresh, upgrade-<version>, uninstall, rbac")
     args = parser.parse_args()
 
-    os.makedirs(args.work)
     plan = [("fresh", scenarios.fresh, {})]
-    os.makedirs(os.path.join(args.work, "downloads"))
     for version, digest, url in sources("upgrade-sources.txt"):
         plan.append((f"upgrade-{version}", scenarios.upgrade, {"arg": "old_zip", "digest": digest, "url": url,
                                                                "file": f"simple-channel-history-{version}.zip"}))
@@ -78,7 +76,13 @@ def main():
                                               "file": f"rbac-{version}.zip"}))
     if args.scenarios != "all":
         wanted = set(args.scenarios.split(","))
+        unknown = wanted - {p[0] for p in plan}
+        if unknown:
+            # A mistyped name would otherwise run nothing and exit 0.
+            parser.error(f"unknown scenario(s) {', '.join(sorted(unknown))}; known: {', '.join(p[0] for p in plan)}")
         plan = [p for p in plan if p[0] in wanted]
+    os.makedirs(args.work)
+    os.makedirs(os.path.join(args.work, "downloads"))
 
     pristine = unpack(args.tarball, os.path.join(args.work, "pristine"))
     db = Database(args.db)

@@ -9,6 +9,7 @@ Administrators do. That endpoint deletes every library the request leaves out, s
 here sends the engine's full current library list.
 """
 
+import json
 import os
 import uuid
 import xml.etree.ElementTree as ET
@@ -308,6 +309,13 @@ def deleted_content(api, kind, row_id):
 def purge(api, kind, row_id):
     path = "/purgeDeletedChannel" if kind == "channel" else "/purgeDeletedCodeTemplate"
     return _value(api.xml("POST", EXT + path, query={"id": row_id})) == "true"
+
+
+def json_list(api, path, query=None):
+    """One of the plugin's list endpoints as JSON, the way the web administrator reads it.
+    Returns (HTTP status, the parsed body or None)."""
+    status, text = api.request("GET", EXT + path, accept="application/json", query=query)
+    return status, (json.loads(text) if status == 200 and text.strip() else None)
 
 
 def prune_status(api, kind, item_id, keep_from_history_id):

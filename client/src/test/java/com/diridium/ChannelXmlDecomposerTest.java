@@ -10,6 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 import org.junit.Test;
+import org.xml.sax.SAXParseException;
 
 public class ChannelXmlDecomposerTest {
 
@@ -208,12 +209,18 @@ public class ChannelXmlDecomposerTest {
 
     @Test
     public void testMalformedXmlThrowsException() {
-        try {
-            ChannelXmlDecomposer.decomposeWithNames("not valid xml <>").getComponents();
-            fail("Should have thrown an exception for malformed XML");
-        } catch (Exception e) {
-            // Expected
-        }
+        // A parse error, not just any exception: a NullPointerException would mean a bug, not bad XML.
+        assertThrows(SAXParseException.class, () -> ChannelXmlDecomposer.decomposeWithNames("not valid xml <>"));
+    }
+
+    @Test
+    public void testDoctypeIsRejected() {
+        // The XXE guard: a channel XML with a DOCTYPE, here declaring an external entity, is refused
+        // before any entity is resolved.
+        String xml = "<?xml version=\"1.0\"?><!DOCTYPE channel [<!ENTITY xxe SYSTEM \"file:///etc/passwd\">]>"
+                + "<channel><name>&xxe;</name></channel>";
+        SAXParseException e = assertThrows(SAXParseException.class, () -> ChannelXmlDecomposer.decomposeWithNames(xml));
+        assertTrue(e.getMessage(), e.getMessage().contains("DOCTYPE"));
     }
 
     @Test

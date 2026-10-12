@@ -235,15 +235,9 @@ public class DeletedItemsSettingsPanel extends AbstractSettingsPanel {
 
     private void applyFilter() {
         String typeFilter = (String) filterCombo.getSelectedItem();
-        String search = searchField != null ? searchField.getText().trim().toLowerCase() : "";
-
-        List<DeletedItemInfo> filtered = new ArrayList<>();
-        for (DeletedItemInfo info : allItems) {
-            if (FILTER_CHANNELS.equals(typeFilter) && !DeletedItemInfo.TYPE_CHANNEL.equals(info.getType())) continue;
-            if (FILTER_CODE_TEMPLATES.equals(typeFilter) && !DeletedItemInfo.TYPE_CODE_TEMPLATE.equals(info.getType())) continue;
-            if (!search.isEmpty() && !info.getName().toLowerCase().contains(search)) continue;
-            filtered.add(info);
-        }
+        String type = FILTER_CHANNELS.equals(typeFilter) ? DeletedItemInfo.TYPE_CHANNEL
+                : FILTER_CODE_TEMPLATES.equals(typeFilter) ? DeletedItemInfo.TYPE_CODE_TEMPLATE : null;
+        List<DeletedItemInfo> filtered = DeletedItemFilter.filter(allItems, type, searchField != null ? searchField.getText() : "");
 
         model = new DeletedItemTableModel(filtered);
         table.setModel(model);

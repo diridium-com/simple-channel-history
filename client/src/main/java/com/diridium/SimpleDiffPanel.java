@@ -246,8 +246,8 @@ public class SimpleDiffPanel extends JPanel {
     }
 
     private void displayDiff(String leftContent, String rightContent) {
-        List<String> leftLines = leftContent.isEmpty() ? List.of() : Arrays.asList(leftContent.split("\n", -1));
-        List<String> rightLines = rightContent.isEmpty() ? List.of() : Arrays.asList(rightContent.split("\n", -1));
+        List<String> leftLines = splitLines(leftContent);
+        List<String> rightLines = splitLines(rightContent);
 
         Patch<String> patch = DiffUtils.diff(leftLines, rightLines);
 
@@ -387,7 +387,7 @@ public class SimpleDiffPanel extends JPanel {
     }
 
     private void displayContent(String content) {
-        List<String> lines = content.isEmpty() ? List.of() : Arrays.asList(content.split("\n", -1));
+        List<String> lines = splitLines(content);
 
         StyledDocument doc = leftPane.getStyledDocument();
         Style normalStyle = doc.addStyle("normal", null);
@@ -460,6 +460,14 @@ public class SimpleDiffPanel extends JPanel {
         } else {
             lineNumBuilder.append("     ");
         }
+    }
+
+    /**
+     * The content's lines. Empty content is no lines, not one empty line, so a component that is new
+     * or removed shows as added or deleted lines rather than a changed one.
+     */
+    static List<String> splitLines(String content) {
+        return content.isEmpty() ? List.of() : Arrays.asList(content.split("\n", -1));
     }
 
     static List<String> toCharList(String s) {
