@@ -14,6 +14,7 @@ import zipfile
 
 import content as c
 from databases import PLUGIN_TABLES
+from oie import Api
 
 
 class Report:
@@ -81,6 +82,16 @@ def check_tables_created_once(r, engine):
                 f"logged {count} times")
 
 
+def check_revert_event(r, api, label, kind, item_id, revision):
+    """The plugin's event for a revert names the revision reverted to, the user who reverted, and their address."""
+    key = "channel" if kind == "channel" else "Code Template ID"
+    event = next((e for e in c.plugin_events(api) if "Reverted to revision" in e and item_id in (e.get(key) or "")), None)
+    me = c.current_user_id(api)
+    r.check(f"{label}'s revert event names revision {revision}, user {me} and an address",
+            event is not None and event["Reverted to revision"] == revision and event["userId"] == me
+            and bool(event["ipAddress"]), str(event))
+
+
 # ---------- the full history checks
 
 def history_setup(r, api):
@@ -106,7 +117,9 @@ def history_setup(r, api):
         for hid, k in zip(ids, ("v3", "big", "v1")):
             text = c.content(api, "channel", cid, hid)
             r.check(f"channel A content of the {k} revision", m[k] in text, f"length {len(text)}")
+        first = c.history(api, "channel", cid)[-1]["revision"]
         r.check("revert channel A to its first revision", c.revert(api, "channel", cid, ids[-1]))
+        check_revert_event(r, api, "channel A", "channel", cid, first)
         after = c.channel_settings(api, cid)
         r.check("the revert kept channel A disabled, its pruning and its tags", after == expected,
                 f"{expected} became {after}")
@@ -131,6 +144,15 @@ def history_setup(r, api):
     r.check("the revert left channel E enabled, with no pruning and no tags",
             c.channel_settings(api, eid) == ("true", None, []), str(c.channel_settings(api, eid)))
 
+    # A prune's cut-off must be one of the channel's own rows. Before 2.8.1 any number was taken: channel
+    # E's newer row deleted channel A's history up to it, and a large number deleted all of it.
+    if "kept" in st["A"]:
+        for label, wrong in (("channel E's revision", e_ids[0] if e_ids else "0"), ("a number past every row", "999999999")):
+            status, text = c.prune_status(api, "channel", cid, wrong)
+            r.check(f"prune channel A at {label} is refused", status == 400, f"HTTP {status}: {text[:150]}")
+        r.check("channel A still has its newest 2 rows after the refused prunes",
+                c.history_ids(api, "channel", cid) == st["A"]["kept"], str(c.history_ids(api, "channel", cid)))
+
     # Code template T in library L, saved through the bulk update like the Administrators do.
     lid, tid, m = c.new_id(), c.new_id(), c.markers("T")
     st["L"], st["T"] = lid, {"id": tid, "m": m}
@@ -145,7 +167,9 @@ def history_setup(r, api):
         for hid, k in zip(ids, ("v3", "big", "v1")):
             text = c.content(api, "template", tid, hid)
             r.check(f"code template T content of the {k} revision", m[k] in text, f"length {len(text)}")
+        first = c.history(api, "template", tid)[-1]["revision"]
         r.check("revert code template T to its first revision", c.revert(api, "template", tid, ids[-1]))
+        check_revert_event(r, api, "code template T", "template", tid, first)
         ids = c.history_ids(api, "template", tid)
         r.check("code template T has 4 history rows after the revert", len(ids) == 4, str(ids))
         newest = c.content(api, "template", tid, ids[0])
@@ -153,6 +177,10 @@ def history_setup(r, api):
         r.check("prune code template T to the newest 2 deletes 2", c.prune(api, "template", tid, ids[1]) == 2)
         r.check("code template T keeps the newest 2 rows", c.history_ids(api, "template", tid) == ids[:2])
         st["T"]["kept"] = ids[:2]
+        status, text = c.prune_status(api, "template", tid, "999999999")
+        r.check("prune code template T at a number past every row is refused", status == 400, f"HTTP {status}: {text[:150]}")
+        r.check("code template T still has its newest 2 rows after the refused prune",
+                c.history_ids(api, "template", tid) == ids[:2])
 
     # Code template P through the single-template PUT, for comparison, then filed into L.
     pid = c.new_id()
@@ -220,6 +248,8 @@ def history_verify(r, api, st):
         r.check(f"purge deleted {kind} {key}", c.purge(api, kind, rows[0]["id"]))
         r.check(f"deleted {kind} {key} is gone after the purge",
                 all(row.get("itemId") != item["id"] for row in c.deleted(api, kind)))
+        r.check(f"purging deleted {kind} {key} again reports false (nothing was purged)",
+                not c.purge(api, kind, rows[0]["id"]))
 
 
 def check_rows(r, db, dbname, expected):
@@ -339,4 +369,83 @@ def uninstall(r, engine, db, dbname, new_zip, **_):
     r.check("after reinstall: no deleted channels", c.deleted(api, "channel") == [])
     r.check("after reinstall: a new save is recorded",
             c.update_channel(api, cid, "SCH e2e X", "v3") and len(c.history_ids(api, "channel", cid)) == 1)
+    check_logs(r, engine)
+
+
+def rbac(r, engine, db, dbname, new_zip, rbac_zip, **_):
+    """rbac installed alongside. A role limited to some channels must see and handle only those channels'
+    deleted snapshots, and a role without "manage channels" gets no deleted channels at all. Admin is the control.
+    Before 2.8.1 the deleted-channel endpoints ignored channel restrictions."""
+    api = engine.start()
+    for z in (new_zip, rbac_zip):
+        ok, detail = c.install(api, z)
+        r.check(f"install {os.path.basename(z)}", ok, detail)
+    api = engine.restart()
+    check_server_jar(r, engine, new_zip)
+    r.check("rbac is running", c.rbac_answers(api))
+
+    # Live channels L1 (in the role) and L2 (not); deleted channels D1 (in the role) and D2 (not);
+    # deleted code template DT.
+    ids = {key: c.new_id() for key in ("L1", "L2", "D1", "D2")}
+    for key, cid in ids.items():
+        r.check(f"create channel {key}", c.create_channel(api, cid, f"SCH e2e rbac {key}", "rbac"))
+    for key in ("D1", "D2"):
+        c.delete_channel(api, ids[key])
+    lid, tid = c.new_id(), c.new_id()
+    ok, detail = c.bulk_update(api, c.libraries(api) + [c.new_library(lid, "SCH e2e rbac")])
+    r.check("create a library", ok, detail)
+    ok, detail = c.save_template(api, lid, tid, "schE2eRbacDT", "rbac")
+    r.check("save code template DT", ok, detail)
+    ok, detail = c.remove_template(api, lid, tid)
+    r.check("remove code template DT", ok, detail)
+
+    snapshot = {row["itemId"]: row["id"] for row in c.deleted(api, "channel")}
+    r.check("admin sees the deleted channels D1 and D2", ids["D1"] in snapshot and ids["D2"] in snapshot, str(snapshot))
+    r.check("admin sees the deleted code template DT", any(row.get("itemId") == tid for row in c.deleted(api, "template")))
+    if ids["D1"] not in snapshot or ids["D2"] not in snapshot:
+        return
+
+    channel_role = c.create_role(api, "SCH e2e two channels", ["viewChannels", "manageChannels"], [ids["L1"], ids["D1"]])
+    template_role = c.create_role(api, "SCH e2e code templates only", ["viewCodeTemplates", "manageCodeTemplates"])
+    password = "Sch-e2e-" + c.new_id()[:12] + "!"
+    users = {}
+    for name, role in (("sch-e2e-channels", channel_role), ("sch-e2e-templates", template_role)):
+        user_id = c.create_user(api, name, password)
+        c.assign_role(api, user_id, role)
+        users[name] = Api(engine.port, name, password)
+        users[name].login(wait=60)
+    restricted, templates_only = users["sch-e2e-channels"], users["sch-e2e-templates"]
+
+    # Control: rbac's restriction is in force where the engine itself checks it (the history endpoints).
+    r.check("restricted user: channel L1's history is readable", c.history_status(restricted, "channel", ids["L1"]) == 200)
+    status = c.history_status(restricted, "channel", ids["L2"])
+    r.check("restricted user: channel L2's history is refused", status == 403, f"HTTP {status}")
+
+    status, rows = c.deleted_status(restricted, "channel")
+    seen = {row.get("itemId") for row in rows or []}
+    r.check("restricted user: Deleted Items lists D1 and not D2", status == 200 and ids["D1"] in seen
+            and ids["D2"] not in seen, f"HTTP {status}: {seen}")
+    status, text = c.deleted_content_status(restricted, "channel", snapshot[ids["D2"]])
+    r.check("restricted user: D2's snapshot is refused", status == 403, f"HTTP {status}")
+    status, text = c.deleted_content_status(restricted, "channel", 999999999)
+    r.check("restricted user: a snapshot number that doesn't exist is refused", status == 403, f"HTTP {status}")
+    status, text = c.purge_status(restricted, "channel", snapshot[ids["D2"]])
+    r.check("restricted user: purging D2's snapshot is refused", status == 403, f"HTTP {status}")
+    r.check("D2's snapshot is still there", ids["D2"] in {row.get("itemId") for row in c.deleted(api, "channel")})
+    status, text = c.deleted_content_status(restricted, "channel", snapshot[ids["D1"]])
+    r.check("restricted user: D1's snapshot is readable", status == 200 and ids["D1"] in text, f"HTTP {status}")
+    status, text = c.purge_status(restricted, "channel", snapshot[ids["D1"]])
+    r.check("restricted user: purging D1's snapshot works", status == 200 and "true" in text, f"HTTP {status}: {text[:100]}")
+
+    # The plugin's endpoints declare the engine's permissions ("manage channels" here), but rbac 1.1.3 has no
+    # mapping for another plugin's operations and allows any operation it doesn't know. So this role, which has
+    # no channel permissions, still gets the list. Recorded, not judged: the change belongs in rbac.
+    status, rows = c.deleted_status(templates_only, "channel")
+    r.note("templates-only user (no channel permissions): the deleted-channel list's HTTP status", status)
+    status, rows = c.deleted_status(templates_only, "template")
+    r.check("templates-only user: the deleted code template DT is listed",
+            status == 200 and any(row.get("itemId") == tid for row in rows or []), f"HTTP {status}")
+
+    status, text = c.deleted_content_status(api, "channel", snapshot[ids["D2"]])
+    r.check("admin still reads D2's snapshot", status == 200 and ids["D2"] in text, f"HTTP {status}")
     check_logs(r, engine)

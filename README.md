@@ -82,7 +82,7 @@ The plugin zip will be in `package/target/simple-channel-history-<version>.zip`.
 
 ### End-to-end tests
 
-`e2e/run.py` installs a built zip into the released OIE engine through the engine's own installer and checks the plugin on a real database: a fresh install, an upgrade from each release in `e2e/upgrade-sources.txt`, and an uninstall. CI runs it on every push and pull request against Derby, PostgreSQL, MySQL, SQL Server (jTDS and Microsoft drivers) and Oracle.
+`e2e/run.py` installs a built zip into the released OIE engine through the engine's own installer and checks the plugin on a real database: a fresh install, an upgrade from each release in `e2e/upgrade-sources.txt`, an uninstall, and an install alongside [Role-Based Access Control](https://github.com/diridium-com/role-based-access-control) (the release in `e2e/rbac-source.txt`), where a role limited to some channels must see only those channels' deleted snapshots. CI runs it on every push and pull request against Derby, PostgreSQL, MySQL, SQL Server (jTDS and Microsoft drivers) and Oracle.
 
 Locally it needs Java 17, Docker for every database but Derby, and the OIE distribution tarball (`scripts/install-engine-jars.sh` leaves a checked copy in `target/oie-dist/`):
 

@@ -268,6 +268,12 @@ def history_ids(api, kind, item_id):
     return [row["hash"] for row in history(api, kind, item_id)]
 
 
+def history_status(api, kind, item_id):
+    """The history list's HTTP status, without raising on an error."""
+    path, key = (("/history", "channelId") if kind == "channel" else ("/codeTemplateHistory", "codeTemplateId"))
+    return api.request("GET", EXT + path, query={key: item_id})[0]
+
+
 def content(api, kind, item_id, history_id):
     path, key = (("/content", "channelId") if kind == "channel" else ("/codeTemplateContent", "codeTemplateId"))
     status, text = api.text(EXT + path, query={key: item_id, "revision": history_id})
@@ -302,6 +308,87 @@ def deleted_content(api, kind, row_id):
 def purge(api, kind, row_id):
     path = "/purgeDeletedChannel" if kind == "channel" else "/purgeDeletedCodeTemplate"
     return _value(api.xml("POST", EXT + path, query={"id": row_id})) == "true"
+
+
+def prune_status(api, kind, item_id, keep_from_history_id):
+    """Prune without raising on an error status. Returns (HTTP status, body)."""
+    path, key = (("/pruneChannelHistory", "channelId") if kind == "channel"
+                 else ("/pruneCodeTemplateHistory", "codeTemplateId"))
+    return api.request("POST", EXT + path, query={key: item_id, "revision": keep_from_history_id})
+
+
+def deleted_status(api, kind):
+    """The Deleted Items list without raising on an error status. Returns (HTTP status, rows or None)."""
+    status, text = api.request("GET", EXT + ("/deletedChannels" if kind == "channel" else "/deletedCodeTemplates"))
+    return status, (_rows(ET.fromstring(text)) if status == 200 and text.strip() else None)
+
+
+def deleted_content_status(api, kind, row_id):
+    path = "/deletedChannelContent" if kind == "channel" else "/deletedCodeTemplateContent"
+    return api.text(EXT + path, query={"id": row_id})
+
+
+def purge_status(api, kind, row_id):
+    path = "/purgeDeletedChannel" if kind == "channel" else "/purgeDeletedCodeTemplate"
+    return api.request("POST", EXT + path, query={"id": row_id})
+
+
+def plugin_events(api, limit=100):
+    """The plugin's own entries in the engine's event log, newest first: each one's attributes plus
+    'userId' and 'ipAddress'."""
+    events = []
+    for event in api.xml("GET", "/events", query={"limit": limit}):
+        if event.findtext("name") != "Simple Channel History":
+            continue
+        fields = {entry[0].text: entry[1].text for entry in event.iter("entry")}
+        fields.update(id=int(event.findtext("id")), userId=event.findtext("userId"), ipAddress=event.findtext("ipAddress"))
+        events.append(fields)
+    return sorted(events, key=lambda e: e["id"], reverse=True)
+
+
+# ---------- users and rbac roles
+
+def current_user_id(api):
+    return api.xml("GET", "/users/current").findtext("id")
+
+
+def create_user(api, username, password):
+    """Creates an engine user and sets its password. Returns the user's id."""
+    user = ET.Element("user")
+    for tag, text in (("username", username), ("firstName", "SCH"), ("lastName", "e2e"),
+                      ("email", f"{username}@example.com")):
+        ET.SubElement(user, tag).text = text
+    api.xml("POST", "/users", _xml(user))
+    uid = api.xml("GET", f"/users/{username}").findtext("id")
+    status, text = api.request("PUT", f"/users/{uid}/password", password, content_type="text/plain")
+    if status not in (200, 204) or "<string>" in text:   # a list of strings is the password rules it broke
+        raise ApiError(f"PUT /users/{uid}/password -> HTTP {status}: {text[:300]}")
+    return uid
+
+
+RBAC = "/extensions/rbac"
+
+
+def rbac_answers(api):
+    """rbac is installed and running: its role list answers."""
+    return api.request("GET", RBAC + "/roles")[0] == 200
+
+
+def create_role(api, name, permissions, channel_ids=()):
+    """An rbac role. An empty channel_ids leaves the role unrestricted by channel. Returns the role's id."""
+    role = ET.Element("com.diridium.rbac.Role")
+    ET.SubElement(role, "name").text = name
+    ET.SubElement(role, "description").text = "simple-channel-history e2e"
+    for tag, values in (("permissions", permissions), ("channelIds", channel_ids)):
+        holder = ET.SubElement(role, tag)
+        for value in values:
+            ET.SubElement(holder, "string").text = value
+    ET.SubElement(role, "isAdmin").text = "false"
+    return api.xml("POST", RBAC + "/roles", _xml(role)).findtext("id")
+
+
+def assign_role(api, user_id, role_id):
+    api.xml("POST", f"{RBAC}/users/{user_id}/role/{role_id}")
 
 
 # ---------- extensions
