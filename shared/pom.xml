@@ -18,7 +18,7 @@
     <name>Simple Channel History Shared</name>
 
     <properties>
-        <swagger-annotations.version>2.1.9</swagger-annotations.version>
+        <swagger-annotations.version>2.0.10</swagger-annotations.version>
     </properties>
 
     <dependencies>
@@ -26,6 +26,7 @@
             <groupId>io.swagger.core.v3</groupId>
             <artifactId>swagger-annotations</artifactId>
             <version>${swagger-annotations.version}</version>
+            <scope>provided</scope>
         </dependency>
     </dependencies>
 </project>

@@ -136,7 +136,6 @@
                     <includes>
                         <include>*${project.version}*.jar</include>
                         <include>java-diff-utils-*.jar</include>
-                        <include>ognl-*.jar</include>
                     </includes>
                     <keystore>${signing.keystore}</keystore>
                     <storetype>${signing.storetype}</storetype>
