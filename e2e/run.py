@@ -11,7 +11,8 @@ Needs Java 17 (JAVA_HOME or --java-home) for the engine and Docker for every dat
 --work must not exist yet; the run leaves each engine and its logs there.
 
 Scenarios: fresh (the full history checks plus the OIE #296 record), one upgrade per entry in
-upgrade-sources.txt (each zip downloaded and checked against its pinned SHA-256), and uninstall.
+upgrade-sources.txt, uninstall, and rbac (the release in rbac-source.txt installed alongside, with
+restricted roles). Each downloaded zip is checked against its pinned SHA-256.
 Exit status 1 if any check failed.
 """
 
@@ -32,15 +33,16 @@ from engine import Engine, unpack  # noqa: E402
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
-def upgrade_sources():
-    sources = []
-    with open(os.path.join(HERE, "upgrade-sources.txt"), encoding="utf-8") as f:
+def sources(name):
+    """The lines of a sources file: (version, SHA-256, URL) each."""
+    found = []
+    with open(os.path.join(HERE, name), encoding="utf-8") as f:
         for line in f:
             line = line.split("#", 1)[0].strip()
             if line:
                 version, digest, url = line.split()
-                sources.append((version, digest, url))
-    return sources
+                found.append((version, digest, url))
+    return found
 
 
 def download(url, digest, dest):
@@ -67,9 +69,13 @@ def main():
     os.makedirs(args.work)
     plan = [("fresh", scenarios.fresh, {})]
     os.makedirs(os.path.join(args.work, "downloads"))
-    for version, digest, url in upgrade_sources():
-        plan.append((f"upgrade-{version}", scenarios.upgrade, {"version": version, "digest": digest, "url": url}))
+    for version, digest, url in sources("upgrade-sources.txt"):
+        plan.append((f"upgrade-{version}", scenarios.upgrade, {"arg": "old_zip", "digest": digest, "url": url,
+                                                               "file": f"simple-channel-history-{version}.zip"}))
     plan.append(("uninstall", scenarios.uninstall, {}))
+    for version, digest, url in sources("rbac-source.txt"):
+        plan.append(("rbac", scenarios.rbac, {"arg": "rbac_zip", "digest": digest, "url": url,
+                                              "file": f"rbac-{version}.zip"}))
     if args.scenarios != "all":
         wanted = set(args.scenarios.split(","))
         plan = [p for p in plan if p[0] in wanted]
@@ -88,8 +94,8 @@ def main():
             try:
                 kwargs = {"new_zip": os.path.abspath(args.zip)}
                 if "url" in extra:
-                    kwargs["old_zip"] = download(extra["url"], extra["digest"], os.path.join(
-                        args.work, "downloads", f"simple-channel-history-{extra['version']}.zip"))
+                    kwargs[extra["arg"]] = download(extra["url"], extra["digest"], os.path.join(
+                        args.work, "downloads", extra["file"]))
                 dbname = "sch_" + name.replace("-", "_").replace(".", "_")
                 settings = db.create(dbname)
                 engine = Engine(pristine, os.path.join(args.work, name, "oie"), args.java_home)

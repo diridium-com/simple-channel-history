@@ -88,6 +88,12 @@
         WHERE id = #{id} AND code_template_id = #{codeTemplateId}
     </select>
 
+    <select id="getCodeTemplateRevisionNumber" parameterType="map" resultType="Integer">
+        SELECT revision
+        FROM code_template_history
+        WHERE id = #{id} AND code_template_id = #{codeTemplateId}
+    </select>
+
     <delete id="deleteCodeTemplateHistory" parameterType="String">
         DELETE FROM code_template_history
         WHERE code_template_id = #{value}

@@ -4,6 +4,7 @@
 """Runs the released OIE engine, unpacked from its distribution tarball, as a local process."""
 
 import os
+import re
 import shutil
 import signal
 import socket
@@ -110,10 +111,14 @@ class Engine:
         with open(path, encoding="utf-8", errors="replace") as f:
             return f.read()
 
+    # The plugin's classes sit directly in com.diridium. Other Diridium plugins, such as rbac in the
+    # rbac scenario, use subpackages (com.diridium.rbac), and their lines are not this plugin's.
+    PLUGIN_LOGGER = re.compile(r"\bcom\.diridium\.[A-Z]")
+
     def plugin_log_lines(self, level):
-        """Lines the plugin (com.diridium) logged at the given level."""
+        """Lines the plugin logged at the given level."""
         return [line for line in self.log().splitlines()
-                if line.startswith(level) and "com.diridium" in line]
+                if line.startswith(level) and self.PLUGIN_LOGGER.search(line)]
 
     def extension_files(self, name):
         folder = os.path.join(self.home, "extensions", name)

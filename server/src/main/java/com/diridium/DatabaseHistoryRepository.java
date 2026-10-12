@@ -245,6 +245,29 @@ public class DatabaseHistoryRepository {
 
     // ========== Prune Methods ==========
 
+    /** @return whether historyId is one of this channel's history rows (false for a non-numeric id) */
+    public boolean isChannelHistoryRow(String channelId, String historyId) {
+        return isHistoryRow("getChannelRevisionNumber", "channelId", channelId, historyId);
+    }
+
+    /** @return whether historyId is one of this code template's history rows (false for a non-numeric id) */
+    public boolean isCodeTemplateHistoryRow(String codeTemplateId, String historyId) {
+        return isHistoryRow("getCodeTemplateRevisionNumber", "codeTemplateId", codeTemplateId, historyId);
+    }
+
+    private boolean isHistoryRow(String statement, String itemKey, String itemId, String historyId) {
+        long id;
+        try {
+            id = Long.parseLong(historyId);
+        } catch (NumberFormatException e) {
+            return false;
+        }
+        Map<String, Object> params = new HashMap<>();
+        params.put(itemKey, itemId);
+        params.put("id", id);
+        return SqlConfig.getInstance().getSqlSessionManager().selectOne(stmt(statement), params) != null;
+    }
+
     public int pruneChannelHistoryOlderThan(String channelId, String historyId) {
         try {
             Map<String, Object> params = new HashMap<>();
@@ -292,6 +315,7 @@ public class DatabaseHistoryRepository {
             log.info("Saved deleted channel snapshot for {} ({})", channel.getName(), channel.getId());
         } catch (Exception e) {
             // Fail silent - don't block channel delete if snapshot save fails
+            // The caller deletes the history even then: an insert failing here means the database itself is failing.
             log.error("Failed to save deleted channel snapshot for {}", channel.getId(), e);
         }
     }
@@ -309,6 +333,7 @@ public class DatabaseHistoryRepository {
             log.info("Saved deleted code template snapshot for {} ({})", codeTemplate.getName(), codeTemplate.getId());
         } catch (Exception e) {
             // Fail silent - don't block code template delete if snapshot save fails
+            // The caller deletes the history even then: an insert failing here means the database itself is failing.
             log.error("Failed to save deleted code template snapshot for {}", codeTemplate.getId(), e);
         }
     }
@@ -423,22 +448,26 @@ public class DatabaseHistoryRepository {
         }
     }
 
-    public void purgeDeletedChannel(long id) {
+    /** @return the number of snapshots deleted: 1, or 0 if there was none with that id */
+    public int purgeDeletedChannel(long id) {
         try {
-            SqlConfig.getInstance().getSqlSessionManager()
+            int deleted = SqlConfig.getInstance().getSqlSessionManager()
                     .delete(stmt("purgeDeletedChannel"), id);
-            log.info("Purged deleted channel snapshot id {}", id);
+            log.info("Purged {} deleted channel snapshot(s) with id {}", deleted, id);
+            return deleted;
         } catch (Exception e) {
             log.error("Failed to purge deleted channel id {}", id, e);
             throw new RuntimeException(e);
         }
     }
 
-    public void purgeDeletedCodeTemplate(long id) {
+    /** @return the number of snapshots deleted: 1, or 0 if there was none with that id */
+    public int purgeDeletedCodeTemplate(long id) {
         try {
-            SqlConfig.getInstance().getSqlSessionManager()
+            int deleted = SqlConfig.getInstance().getSqlSessionManager()
                     .delete(stmt("purgeDeletedCodeTemplate"), id);
-            log.info("Purged deleted code template snapshot id {}", id);
+            log.info("Purged {} deleted code template snapshot(s) with id {}", deleted, id);
+            return deleted;
         } catch (Exception e) {
             log.error("Failed to purge deleted code template id {}", id, e);
             throw new RuntimeException(e);

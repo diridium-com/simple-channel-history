@@ -124,7 +124,8 @@ jobs:
 
   # Installs the zip into the released OIE engine through its own installer, the way a
   # user would, and runs the scenarios in e2e/run.py: fresh install, upgrade from each
-  # release in e2e/upgrade-sources.txt, and uninstall. One job per database.
+  # release in e2e/upgrade-sources.txt, uninstall, and rbac (the release in
+  # e2e/rbac-source.txt installed alongside). One job per database.
   e2e:
     needs: build
     runs-on: ubuntu-latest
