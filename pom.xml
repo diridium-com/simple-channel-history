@@ -20,26 +20,22 @@
         <plugin.supported.mc.versions>${mc.version}</plugin.supported.mc.versions>
 
         <mc.version>4.6.0</mc.version>
-        <!-- These provided versions are not all the ones OIE 4.6.0 ships (MyBatis 3.5.9 here,
-             3.1.1 in the engine, among others). They never reach a user: provided jars are not
-             in the zip, and the plugin runs on the engine's own copies. The risk is new code
-             calling a method the engine's version lacks. The unit tests would not catch that,
-             since they run on these versions, but the e2e suite (e2e/run.py) runs on the
-             engine's real jars and would. Left as is on purpose (#26). -->
-        <ognl.version>3.2.15</ognl.version>
-        <javax-servlet.version>4.0.1</javax-servlet.version>
+        <!-- The provided versions match what OIE ships (server-lib and client-lib), since that is
+             what the plugin runs against: compiling against a newer line would let code call
+             methods the engine lacks. Re-check them on every mc.version bump. -->
+        <javax-servlet.version>3.1.0</javax-servlet.version>
         <javax-rs-api.version>2.0.1</javax-rs-api.version>
-        <commons-beanutils.version>1.9.4</commons-beanutils.version>
-        <xstream.version>1.4.18</xstream.version>
+        <commons-beanutils.version>1.11.0</commons-beanutils.version>
+        <xstream.version>1.4.20</xstream.version>
         <junit.version>4.13.2</junit.version>
         <rhino.version>1.7.13</rhino.version>
         <xpp3.version>1.1.4c</xpp3.version>
-        <commons-io.version>2.10.0</commons-io.version>
-        <commons-lang3.version>3.12.0</commons-lang3.version>
-        <log4j.version>2.17.2</log4j.version>
-        <javassist.version>3.28.0-GA</javassist.version>
-        <slf4j.version>1.7.32</slf4j.version>
-        <mybatis.version>3.5.9</mybatis.version>
+        <commons-io.version>2.21.0</commons-io.version>
+        <commons-lang3.version>3.20.0</commons-lang3.version>
+        <log4j.version>2.25.3</log4j.version>
+        <javassist.version>3.26.0-GA</javassist.version>
+        <slf4j.version>1.7.30</slf4j.version>
+        <mybatis.version>3.1.1</mybatis.version>
 
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <!-- Fixed entry times in the jars, so the same source builds the same bytes. -->
@@ -155,19 +151,6 @@
             <artifactId>commons-beanutils</artifactId>
             <version>${commons-beanutils.version}</version>
             <scope>provided</scope>
-        </dependency>
-        <dependency>
-            <groupId>ognl</groupId>
-            <artifactId>ognl</artifactId>
-            <version>${ognl.version}</version>
-            <exclusions>
-                <exclusion>
-                    <!-- excluding the dependency to avoid classloading issues
-                       because MC already bundles a higher version. -->
-                    <groupId>org.javassist</groupId>
-                    <artifactId>javassist</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.javassist</groupId>
