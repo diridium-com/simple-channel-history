@@ -69,7 +69,8 @@ export function openHistory(platform, api, { kind, id, name }) {
     const revertBtn = h('button.btn', { onClick: () => revertSelected() }, 'Revert to Selected');
     const buttonBar = h('div', { style: 'display:flex; gap:8px; justify-content:flex-end; padding-top:10px' }, showDiffBtn, revertBtn);
 
-    const body = h('div', { style: 'display:flex; flex-direction:column; width:min(680px, calc(100vw - 60px)); height:min(440px, calc(100vh - 160px))' },
+    // Fills the dialog; the dialog's width is set on the modal below.
+    const body = h('div', { style: 'display:flex; flex-direction:column; width:100%; height:min(440px, calc(100vh - 160px))' },
         table.el, help, buttonBar);
 
     function isLatest(rev) { return rows.length > 0 && String(rows[0].hash) === String(rev.hash); }
@@ -168,7 +169,9 @@ export function openHistory(platform, api, { kind, id, name }) {
     }
 
     updateButtons();
-    const handle = modal({ title: `Version History - ${name}`, body, size: 'wide', buttons: [{ label: 'Close', onClick: () => true }] });
+    const handle = modal({ title: `Version History - ${name}`, body, buttons: [{ label: 'Close', onClick: () => true }] });
+    // 700 px, the width of the Swing history dialog.
+    handle.el.style.width = 'min(700px, calc(100vw - 40px))';
     reload();
     return handle;
 }
