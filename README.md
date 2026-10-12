@@ -15,9 +15,9 @@ An Open Integration Engine plugin for tracking version history of Channels and C
 - Color-coded change indicators (added, removed, modified, unchanged)
 - Revert to any previous version
 - Prune older versions to manage storage
-- Deleted items tracking — automatically saves a final XML snapshot when channels or code templates are deleted
+- Deleted items tracking: automatically saves a final XML snapshot when channels or code templates are deleted
 - Database-backed storage (history travels with database backups)
-- **Runs in both administrators** — the classic Swing Administrator and the OIE web administrator, with full feature parity
+- **Runs in both administrators**: the classic Swing Administrator and the OIE web administrator, with full feature parity
 
 ### Web administrator
 
@@ -65,16 +65,10 @@ Signed builds require a YubiKey with a code signing certificate and the OpenSC P
 
 1. Copy `yubikey-pkcs11.cfg.example` to `yubikey-pkcs11.cfg` and update the library path for your system
 2. Create `certchain.pem` containing your certificate chain (your cert + intermediate CA + root CA in PEM format)
-3. Build with the signing profile:
+3. Build with the signing profile. The build reads the PIN from `YUBIKEY_PIN`, and `read -s` takes it without echoing it or leaving it in your shell history (bash or zsh):
 
 ```bash
-mvn clean package -Psigning -Dsigning.storepass=<your-yubikey-pin>
-```
-
-Or set the PIN via environment variable:
-
-```bash
-export YUBIKEY_PIN=<your-pin>
+read -rs YUBIKEY_PIN && export YUBIKEY_PIN
 mvn clean package -Psigning
 ```
 
@@ -107,8 +101,8 @@ The plugin will create the necessary database tables on first startup.
 - Or right-click a channel and select "View History"
 
 ### Comparing Versions
-- Select two versions in the history table
-- Right-click and select "Show Diff"
+- Double-click a version to compare it with the one before it
+- Or select two versions (Ctrl/Cmd-click) and click "Show Diff"
 
 ### Reverting
 - Select a version in the history table
@@ -120,6 +114,10 @@ Reverting a channel restores it as saved in that revision: connectors, scripts, 
 - Select a version in the history table
 - Right-click and select "Prune older revisions"
 - All versions older than the selected version will be deleted
+
+## Design notes
+
+Why the plugin works the way it does, what is deliberate, and what the tests cover: [docs/design-notes.md](docs/design-notes.md).
 
 ## License
 

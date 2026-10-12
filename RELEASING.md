@@ -20,6 +20,8 @@ CI builds the committed files as they are, the same way the signed build does.
 
 ## 2. Tag
 
+Tag a commit on `main` whose CI run passed, the e2e jobs included. The release job runs the unit tests only, so a commit that never passed CI would ship without having run in a real engine.
+
 ```bash
 git tag vX.Y.Z && git push origin vX.Y.Z
 ```
@@ -31,8 +33,11 @@ git tag vX.Y.Z && git push origin vX.Y.Z
 Check out the tag on the machine with the YubiKey. If its local Maven repository does not have the engine jars for this `mc.version` yet, run `./scripts/install-engine-jars.sh` first. The `signing` profile needs `yubikey-pkcs11.cfg` (start from `yubikey-pkcs11.cfg.example`) and `certchain.pem` in the repo root. Both are gitignored. From the repo root:
 
 ```bash
-mvn clean package -Psigning -Dsigning.storepass=<yubikey-pin>
+read -rs YUBIKEY_PIN && export YUBIKEY_PIN
+mvn clean package -Psigning
 ```
+
+The `signing` profile reads the PIN from `YUBIKEY_PIN`. `read -s` takes it without echoing it or leaving it in your shell history.
 
 Copy `package/target/simple-channel-history-X.Y.Z.zip` somewhere safe right away. A later `mvn clean` deletes it, and it cannot be rebuilt without the key.
 
