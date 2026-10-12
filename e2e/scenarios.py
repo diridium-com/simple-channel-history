@@ -85,12 +85,20 @@ def check_tables_created_once(r, engine):
 
 def history_setup(r, api):
     st = {}
-    # Channel A: three saves (one ~120 KB), revert to the first, prune to the newest two.
+    # Channel A: three saves (one ~120 KB), revert to the first, prune to the newest two. Each save
+    # carries settings and tags the way the channel editor sends them; the revert must keep them.
     cid, m = c.new_id(), c.markers("A")
-    st["A"] = {"id": cid, "m": m}
-    r.check("create channel A", c.create_channel(api, cid, "SCH e2e A", m["v1"]))
+    settings = {"enabled": False, "prune_days": (30, 15),
+                "tags": [(c.new_id(), "SCH e2e Production"), (c.new_id(), "SCH e2e Lab")]}
+    # The fixture's archiveEnabled=false differs from the engine default (true), so a copy that dropped it would show.
+    expected = ("false", ("30", "15", "false", "false"), ["SCH e2e Lab", "SCH e2e Production"])
+    st["A"] = {"id": cid, "m": m, "settings": expected}
+    r.check("create channel A", c.create_channel(api, cid, "SCH e2e A", m["v1"], settings))
     for k in ("big", "v3"):
-        r.check(f"update channel A ({k})", c.update_channel(api, cid, "SCH e2e A", m[k]))
+        r.check(f"update channel A ({k})", c.update_channel(api, cid, "SCH e2e A", m[k], settings))
+    # Control for the revert check below: the saves really set them.
+    r.check("channel A is disabled, prunes at 30/15 days and has two tags",
+            c.channel_settings(api, cid) == expected, str(c.channel_settings(api, cid)))
     ids = c.history_ids(api, "channel", cid)
     r.check("channel A has 3 history rows, newest first", len(ids) == 3 and
             [int(i) for i in ids] == sorted((int(i) for i in ids), reverse=True), str(ids))
@@ -99,6 +107,9 @@ def history_setup(r, api):
             text = c.content(api, "channel", cid, hid)
             r.check(f"channel A content of the {k} revision", m[k] in text, f"length {len(text)}")
         r.check("revert channel A to its first revision", c.revert(api, "channel", cid, ids[-1]))
+        after = c.channel_settings(api, cid)
+        r.check("the revert kept channel A disabled, its pruning and its tags", after == expected,
+                f"{expected} became {after}")
         desc = c.channel_description(api, cid)
         r.check("channel A description is v1 plus the revert note",
                 desc.startswith(m["v1"]) and "BEGIN REVERT HISTORY" in desc, desc[:120])
@@ -107,6 +118,18 @@ def history_setup(r, api):
         r.check("prune channel A to the newest 2 deletes 2", c.prune(api, "channel", cid, ids[1]) == 2)
         r.check("channel A keeps the newest 2 rows", c.history_ids(api, "channel", cid) == ids[:2])
         st["A"]["kept"] = ids[:2]
+
+    # Channel E: the empty case. After a revert it must still have no pruning settings and no tags.
+    eid = c.new_id()
+    empty = {"enabled": True, "prune_days": None, "tags": []}
+    r.check("create channel E with no pruning and no tags", c.create_channel(api, eid, "SCH e2e E", "E v1", empty))
+    r.check("update channel E", c.update_channel(api, eid, "SCH e2e E", "E v2", empty))
+    r.check("channel E is enabled, with no pruning and no tags", c.channel_settings(api, eid) == ("true", None, []),
+            str(c.channel_settings(api, eid)))
+    e_ids = c.history_ids(api, "channel", eid)
+    r.check("revert channel E to its first revision", len(e_ids) == 2 and c.revert(api, "channel", eid, e_ids[-1]))
+    r.check("the revert left channel E enabled, with no pruning and no tags",
+            c.channel_settings(api, eid) == ("true", None, []), str(c.channel_settings(api, eid)))
 
     # Code template T in library L, saved through the bulk update like the Administrators do.
     lid, tid, m = c.new_id(), c.new_id(), c.markers("T")
@@ -174,6 +197,9 @@ def history_verify(r, api, st):
         for hid, k in zip(ids, ("v1", "v3")):
             r.check(f"{kind} {key} content after the restart ({k})", item["m"][k] in c.content(api, kind, item["id"], hid))
     if "A" in st:
+        after = c.channel_settings(api, st["A"]["id"])
+        r.check("channel A still disabled, pruning and tagged after the restart", after == st["A"]["settings"],
+                f"{st['A']['settings']} became {after}")
         desc = c.channel_description(api, st["A"]["id"])
         r.check("channel A description after the restart is v1 plus the revert note",
                 desc.startswith(st["A"]["m"]["v1"]) and "BEGIN REVERT HISTORY" in desc)
@@ -240,7 +266,7 @@ def fresh(r, engine, db, dbname, new_zip, **_):
     st = history_setup(r, api)
     api = engine.restart()
     history_verify(r, api, st)
-    check_rows(r, db, dbname, [2, 4, 0, 0])
+    check_rows(r, db, dbname, [5, 4, 0, 0])   # channel A's 2 kept rows + channel E's 3; templates T and P, 2 each
     issue_296(r, api)
     check_tables_created_once(r, engine)
     check_logs(r, engine)

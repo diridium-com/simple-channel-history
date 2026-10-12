@@ -112,7 +112,9 @@ The plugin will create the necessary database tables on first startup.
 
 ### Reverting
 - Select a version in the history table
-- Right-click and select "Revert to this version"
+- Click "Revert to Selected"
+
+Reverting a channel restores it as saved in that revision: connectors, scripts, filters, transformers, and channel properties such as initial state and message storage. Its enabled or disabled state, message pruning settings and tags stay as they are now.
 
 ### Pruning
 - Select a version in the history table

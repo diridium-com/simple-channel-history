@@ -126,9 +126,11 @@ export function openHistory(platform, api, { kind, id, name }) {
         const sel = table.selectedRows();
         if (sel.length !== 1 || isLatest(sel[0])) return;
         const rev = sel[0];
-        const ok = await confirmDialog('Confirm Revert',
-            `Are you sure you want to revert to revision ${shortHash(rev)}?\nThis will overwrite the current ${noun}.`,
-            { danger: true, okLabel: 'Revert' });
+        // A channel revert restores the channel definition; the server keeps its enabled state, pruning and tags.
+        const message = isChannel
+            ? `Revert to revision ${shortHash(rev)}?\nThis restores the channel as saved in that revision: connectors, scripts, filters, transformers, and channel properties such as initial state and message storage.\nThese stay as they are now: enabled or disabled, message pruning, and tags.`
+            : `Are you sure you want to revert to revision ${shortHash(rev)}?\nThis will overwrite the current ${noun}.`;
+        const ok = await confirmDialog('Confirm Revert', message, { danger: true, okLabel: 'Revert' });
         if (!ok) return;
         try {
             const result = await ops.revert(rev.hash);
