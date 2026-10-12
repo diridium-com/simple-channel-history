@@ -54,10 +54,12 @@ export function registerDeletedItems(platform) {
             setLoading(false);
         }, []);
 
+        // Once, when the tab opens. load never changes, and depending on setTasks would reload the tab
+        // whenever the host passed a new function.
         React.useEffect(() => {
             load();
             setTasks('Deleted Items Tasks', [taskButton('Refresh', 'refresh', () => load())]);
-        }, [load, setTasks]);
+        }, []);
 
         const visible = React.useMemo(() => {
             let list = items;
@@ -138,8 +140,10 @@ export function registerDeletedItems(platform) {
         }
 
         const sortArrow = (key) => (sort.key === key ? (sort.dir > 0 ? ' ▲' : ' ▼') : '');
-        const Th = ({ col, label, width }) => (
-            <th className="sortable" style={width ? { width } : null} onClick={() => toggleSort(col)}>{label}{sortArrow(col)}</th>
+        // A plain function, not a component: a component defined here would be a new type on every
+        // render, so React would remount the header cells each time.
+        const th = (col, label, width) => (
+            <th key={col} className="sortable" style={width ? { width } : null} onClick={() => toggleSort(col)}>{label}{sortArrow(col)}</th>
         );
 
         return (
@@ -174,11 +178,11 @@ export function registerDeletedItems(platform) {
                         <table className="dt" style={{ width: '100%' }}>
                             <thead>
                                 <tr>
-                                    <Th col="type" label="Type" width={120} />
-                                    <Th col="name" label="Name" />
-                                    <Th col="itemId" label="Item ID" width={240} />
-                                    <Th col="deletedBy" label="Deleted By" width={130} />
-                                    <Th col="dateDeleted" label="Date Deleted" width={170} />
+                                    {th('type', 'Type', 120)}
+                                    {th('name', 'Name')}
+                                    {th('itemId', 'Item ID', 240)}
+                                    {th('deletedBy', 'Deleted By', 130)}
+                                    {th('dateDeleted', 'Date Deleted', 170)}
                                 </tr>
                             </thead>
                             <tbody>

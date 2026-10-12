@@ -23,7 +23,7 @@ public class ChannelXmlDecomposerTest {
     @Test
     public void testDecomposeVersion1() throws Exception {
         String xml = loadResource("channel-for-diffing-version1.xml");
-        Map<String, DecomposedComponent> components = ChannelXmlDecomposer.decompose(xml);
+        Map<String, DecomposedComponent> components = ChannelXmlDecomposer.decomposeWithNames(xml).getComponents();
 
         // Channel scripts
         assertNotNull(components.get("Channel Scripts/Preprocessing Script"));
@@ -65,13 +65,12 @@ public class ChannelXmlDecomposerTest {
         DecomposedComponent destOrder = components.get("Destination Order");
         assertNotNull(destOrder);
         assertEquals("1. Destination 1 [1]\n2. Destination 2 [2]", destOrder.getContent());
-        assertEquals(DecomposedComponent.Category.CHANNEL_PROPERTIES, destOrder.getCategory());
     }
 
     @Test
     public void testDecomposeVersion2() throws Exception {
         String xml = loadResource("channel-for-diffing-version2.xml");
-        Map<String, DecomposedComponent> components = ChannelXmlDecomposer.decompose(xml);
+        Map<String, DecomposedComponent> components = ChannelXmlDecomposer.decomposeWithNames(xml).getComponents();
 
         // Deploy script changed in version 2
         String deployScript = components.get("Channel Scripts/Deploy Script").getContent();
@@ -96,8 +95,8 @@ public class ChannelXmlDecomposerTest {
         String xml1 = loadResource("channel-for-diffing-version1.xml");
         String xml2 = loadResource("channel-for-diffing-version2.xml");
 
-        Map<String, DecomposedComponent> comp1 = ChannelXmlDecomposer.decompose(xml1);
-        Map<String, DecomposedComponent> comp2 = ChannelXmlDecomposer.decompose(xml2);
+        Map<String, DecomposedComponent> comp1 = ChannelXmlDecomposer.decomposeWithNames(xml1).getComponents();
+        Map<String, DecomposedComponent> comp2 = ChannelXmlDecomposer.decomposeWithNames(xml2).getComponents();
 
         // Deploy script should be different
         assertNotEquals(
@@ -126,30 +125,23 @@ public class ChannelXmlDecomposerTest {
     }
 
     @Test
-    public void testComponentCategories() throws Exception {
+    public void testComponentKeys() throws Exception {
         String xml = loadResource("channel-for-diffing-version2.xml");
-        Map<String, DecomposedComponent> components = ChannelXmlDecomposer.decompose(xml);
+        Map<String, DecomposedComponent> components = ChannelXmlDecomposer.decomposeWithNames(xml).getComponents();
 
-        assertEquals(DecomposedComponent.Category.CHANNEL_SCRIPT,
-                components.get("Channel Scripts/Deploy Script").getCategory());
-        assertEquals(DecomposedComponent.Category.CONNECTOR_CONFIGURATION,
-                components.get("Source Connector/Configuration").getCategory());
-        assertEquals(DecomposedComponent.Category.CONNECTOR_CONFIGURATION,
-                components.get("Destination [1]/Configuration").getCategory());
-        assertEquals(DecomposedComponent.Category.CONNECTOR_SCRIPT,
-                components.get("Destination [1]/Script").getCategory());
-        assertEquals(DecomposedComponent.Category.CHANNEL_PROPERTIES,
-                components.get("Channel Properties").getCategory());
-
-        // Step inherits its parent type's category
-        assertEquals(DecomposedComponent.Category.TRANSFORMER,
-                components.get("Destination [2]/Transformer/Step 0").getCategory());
+        // One of each kind of component, under the key the tree and the diff look it up by
+        assertNotNull(components.get("Channel Scripts/Deploy Script"));
+        assertNotNull(components.get("Source Connector/Configuration"));
+        assertNotNull(components.get("Destination [1]/Configuration"));
+        assertNotNull(components.get("Destination [1]/Script"));
+        assertNotNull(components.get("Channel Properties"));
+        assertNotNull(components.get("Destination [2]/Transformer/Step 0"));
     }
 
     @Test
     public void testParentGroups() throws Exception {
         String xml = loadResource("channel-for-diffing-version2.xml");
-        Map<String, DecomposedComponent> components = ChannelXmlDecomposer.decompose(xml);
+        Map<String, DecomposedComponent> components = ChannelXmlDecomposer.decomposeWithNames(xml).getComponents();
 
         assertEquals("Channel Scripts",
                 components.get("Channel Scripts/Deploy Script").getParentGroup());
@@ -164,7 +156,7 @@ public class ChannelXmlDecomposerTest {
     @Test
     public void testChannelPropertiesDoesNotContainExtractedContent() throws Exception {
         String xml = loadResource("channel-for-diffing-version2.xml");
-        Map<String, DecomposedComponent> components = ChannelXmlDecomposer.decompose(xml);
+        Map<String, DecomposedComponent> components = ChannelXmlDecomposer.decomposeWithNames(xml).getComponents();
 
         String channelProps = components.get("Channel Properties").getContent();
         // Extracted scripts should not appear in the remainder
@@ -180,7 +172,7 @@ public class ChannelXmlDecomposerTest {
     @Test
     public void testConnectorConfigDoesNotContainExtractedSteps() throws Exception {
         String xml = loadResource("channel-for-diffing-version2.xml");
-        Map<String, DecomposedComponent> components = ChannelXmlDecomposer.decompose(xml);
+        Map<String, DecomposedComponent> components = ChannelXmlDecomposer.decomposeWithNames(xml).getComponents();
 
         // Destination 2 config should not contain the JavaScriptStep (it was extracted)
         String dest2Config = components.get("Destination [2]/Configuration").getContent();
@@ -201,8 +193,8 @@ public class ChannelXmlDecomposerTest {
         String xml1 = loadResource("channel-for-diffing-version1.xml");
         String xml2 = loadResource("channel-for-diffing-version2.xml");
 
-        Map<String, DecomposedComponent> comp1 = ChannelXmlDecomposer.decompose(xml1);
-        Map<String, DecomposedComponent> comp2 = ChannelXmlDecomposer.decompose(xml2);
+        Map<String, DecomposedComponent> comp1 = ChannelXmlDecomposer.decomposeWithNames(xml1).getComponents();
+        Map<String, DecomposedComponent> comp2 = ChannelXmlDecomposer.decomposeWithNames(xml2).getComponents();
 
         // Destination 2 config changed between versions (HTTP Sender -> TCP Sender)
         assertNotEquals(
@@ -217,7 +209,7 @@ public class ChannelXmlDecomposerTest {
     @Test
     public void testMalformedXmlThrowsException() {
         try {
-            ChannelXmlDecomposer.decompose("not valid xml <>");
+            ChannelXmlDecomposer.decomposeWithNames("not valid xml <>").getComponents();
             fail("Should have thrown an exception for malformed XML");
         } catch (Exception e) {
             // Expected
@@ -227,7 +219,7 @@ public class ChannelXmlDecomposerTest {
     @Test
     public void testStepExtraction() throws Exception {
         String xml = loadResource("channel-for-diffing-version2.xml");
-        Map<String, DecomposedComponent> components = ChannelXmlDecomposer.decompose(xml);
+        Map<String, DecomposedComponent> components = ChannelXmlDecomposer.decomposeWithNames(xml).getComponents();
 
         // Destination 2 has one JavaScriptStep in its transformer
         String stepKey = "Destination [2]/Transformer/Step 0";
@@ -236,9 +228,6 @@ public class ChannelXmlDecomposerTest {
 
         // Display name includes sequence and type
         assertEquals("Step 0: JavaScriptStep", step.getDisplayName());
-
-        // Category is TRANSFORMER
-        assertEquals(DecomposedComponent.Category.TRANSFORMER, step.getCategory());
 
         // Parent group is the sub-group
         assertEquals("Destination [2]/Transformer", step.getParentGroup());
@@ -284,13 +273,12 @@ public class ChannelXmlDecomposerTest {
                 + "</destinationConnectors>"
                 + "</channel>";
 
-        Map<String, DecomposedComponent> components = ChannelXmlDecomposer.decompose(xml);
+        Map<String, DecomposedComponent> components = ChannelXmlDecomposer.decomposeWithNames(xml).getComponents();
 
         // Source connector has one plugin
         String srcPluginKey = "Source Connector/Plugin: TLSConnectorProperties";
         DecomposedComponent srcPlugin = components.get(srcPluginKey);
         assertNotNull("Source TLS plugin should be extracted", srcPlugin);
-        assertEquals(DecomposedComponent.Category.CONNECTOR_PLUGIN, srcPlugin.getCategory());
         assertEquals("Source Connector", srcPlugin.getParentGroup());
         assertTrue(srcPlugin.getContent().contains("test-cert"));
 
@@ -319,12 +307,12 @@ public class ChannelXmlDecomposerTest {
     public void testEmptyPluginPropertiesProducesNoComponents() throws Exception {
         // The standard test XML has empty <pluginProperties/> — no plugin components should be created
         String xml = loadResource("channel-for-diffing-version1.xml");
-        Map<String, DecomposedComponent> components = ChannelXmlDecomposer.decompose(xml);
+        Map<String, DecomposedComponent> components = ChannelXmlDecomposer.decomposeWithNames(xml).getComponents();
 
         // No plugin components for any connector
         for (Map.Entry<String, DecomposedComponent> entry : components.entrySet()) {
-            assertNotEquals("No plugin components expected, but found: " + entry.getKey(),
-                    DecomposedComponent.Category.CONNECTOR_PLUGIN, entry.getValue().getCategory());
+            assertFalse("No plugin components expected, but found: " + entry.getKey(),
+                    entry.getKey().contains("/Plugin: "));
         }
     }
 
@@ -389,8 +377,8 @@ public class ChannelXmlDecomposerTest {
                 + "</destinationConnectors>"
                 + "</channel>";
 
-        Map<String, DecomposedComponent> comp1 = ChannelXmlDecomposer.decompose(xml1);
-        Map<String, DecomposedComponent> comp2 = ChannelXmlDecomposer.decompose(xml2);
+        Map<String, DecomposedComponent> comp1 = ChannelXmlDecomposer.decomposeWithNames(xml1).getComponents();
+        Map<String, DecomposedComponent> comp2 = ChannelXmlDecomposer.decomposeWithNames(xml2).getComponents();
 
         // Destination Order should differ (destinations reordered)
         assertNotEquals(
@@ -449,8 +437,8 @@ public class ChannelXmlDecomposerTest {
                 + "</destinationConnectors>"
                 + "</channel>";
 
-        Map<String, DecomposedComponent> comp1 = ChannelXmlDecomposer.decompose(xml1);
-        Map<String, DecomposedComponent> comp2 = ChannelXmlDecomposer.decompose(xml2);
+        Map<String, DecomposedComponent> comp1 = ChannelXmlDecomposer.decomposeWithNames(xml1).getComponents();
+        Map<String, DecomposedComponent> comp2 = ChannelXmlDecomposer.decomposeWithNames(xml2).getComponents();
 
         // Both versions key by metaDataId — Destination [1] exists in both
         assertNotNull(comp1.get("Destination [1]/Configuration"));

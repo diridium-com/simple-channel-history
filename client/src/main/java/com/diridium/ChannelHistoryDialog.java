@@ -12,7 +12,6 @@ import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.text.SimpleDateFormat;
-import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 
@@ -37,7 +36,6 @@ import org.slf4j.LoggerFactory;
 
 import com.mirth.connect.client.ui.Frame;
 import com.mirth.connect.client.ui.PlatformUI;
-import com.mirth.connect.model.converters.ObjectXMLSerializer;
 
 /**
  * Dialog for viewing channel version history.
@@ -58,7 +56,7 @@ public class ChannelHistoryDialog extends JDialog {
         super(parent, "Version History - " + channelName, true);
         this.channelId = channelId;
         this.channelName = channelName;
-        ObjectXMLSerializer.getInstance().allowTypes(Collections.emptyList(), Collections.singletonList(RevisionInfo.class.getPackage().getName() + ".**"), Collections.emptyList());
+        AllowedTypes.register();
 
         initComponents();
         loadHistory();

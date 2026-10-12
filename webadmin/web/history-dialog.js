@@ -11,10 +11,9 @@
 import { formatRevisionTime, formatDateTime } from './schi-core.js';
 import { openDiff } from './diff-window.js';
 
+// How the administrators label a revision: "Rev" and the item's revision number (RevisionInfo.getShortHash).
 function shortHash(rev) {
-    if (rev.hash != null && /^\d+$/.test(String(rev.hash))) return `Rev ${rev.revision}`;
-    const hs = rev.hash != null ? String(rev.hash) : '';
-    return hs.length >= 8 ? hs.substring(0, 8) : hs;
+    return `Rev ${rev.revision}`;
 }
 
 // Diff header label: "Old - Rev 3 (user: admin, time: 2026-01-02 14:23)".

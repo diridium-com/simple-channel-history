@@ -25,17 +25,15 @@
              methods the engine lacks. Re-check them on every mc.version bump. -->
         <javax-servlet.version>3.1.0</javax-servlet.version>
         <javax-rs-api.version>2.0.1</javax-rs-api.version>
-        <commons-beanutils.version>1.11.0</commons-beanutils.version>
         <xstream.version>1.4.20</xstream.version>
         <junit.version>4.13.2</junit.version>
-        <rhino.version>1.7.13</rhino.version>
-        <xpp3.version>1.1.4c</xpp3.version>
-        <commons-io.version>2.21.0</commons-io.version>
-        <commons-lang3.version>3.20.0</commons-lang3.version>
         <log4j.version>2.25.3</log4j.version>
-        <javassist.version>3.26.0-GA</javassist.version>
         <slf4j.version>1.7.30</slf4j.version>
         <mybatis.version>3.1.1</mybatis.version>
+
+        <!-- Bundled in the zip, unlike the provided ones above. package/resources/plugin.xml
+             names its jar from this property, so the two can't drift apart. -->
+        <java-diff-utils.version>4.12</java-diff-utils.version>
 
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <!-- Fixed entry times in the jars, so the same source builds the same bytes. -->
@@ -62,9 +60,11 @@
         </profile>
     </profiles>
 
+    <url>https://github.com/diridium-com/simple-channel-history</url>
+
     <organization>
         <name>Diridium Technologies Inc.</name>
-        <url>https://github.com/pacmano1/simple-channel-history</url>
+        <url>https://github.com/diridium-com</url>
     </organization>
 
     <dependencies>
@@ -87,54 +87,6 @@
             <scope>provided</scope>
         </dependency>
         <dependency>
-            <groupId>com.mirth.connect.connectors</groupId>
-            <artifactId>vm-shared</artifactId>
-            <version>${mc.version}</version>
-            <scope>provided</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.mirth.connect.plugins.datatypes</groupId>
-            <artifactId>datatype-raw-shared</artifactId>
-            <version>${mc.version}</version>
-            <scope>provided</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.mirth.connect.plugins.datatypes</groupId>
-            <artifactId>datatype-hl7v2-shared</artifactId>
-            <version>${mc.version}</version>
-            <scope>provided</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.mirth.connect.connectors</groupId>
-            <artifactId>js-shared</artifactId>
-            <version>${mc.version}</version>
-            <scope>provided</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.mirth.connect.plugins</groupId>
-            <artifactId>javascriptstep-shared</artifactId>
-            <version>${mc.version}</version>
-            <scope>provided</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.mirth.connect.connectors</groupId>
-            <artifactId>tcp-shared</artifactId>
-            <version>${mc.version}</version>
-            <scope>provided</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.mirth.connect.plugins</groupId>
-            <artifactId>mllpmode-shared</artifactId>
-            <version>${mc.version}</version>
-            <scope>provided</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.mirth.connect.plugins</groupId>
-            <artifactId>http-shared</artifactId>
-            <version>${mc.version}</version>
-            <scope>provided</scope>
-        </dependency>
-        <dependency>
             <groupId>javax.servlet</groupId>
             <artifactId>javax.servlet-api</artifactId>
             <version>${javax-servlet.version}</version>
@@ -144,18 +96,6 @@
             <groupId>javax.ws.rs</groupId>
             <artifactId>javax.ws.rs-api</artifactId>
             <version>${javax-rs-api.version}</version>
-            <scope>provided</scope>
-        </dependency>
-        <dependency>
-            <groupId>commons-beanutils</groupId>
-            <artifactId>commons-beanutils</artifactId>
-            <version>${commons-beanutils.version}</version>
-            <scope>provided</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.javassist</groupId>
-            <artifactId>javassist</artifactId>
-            <version>${javassist.version}</version>
             <scope>provided</scope>
         </dependency>
         <dependency>
@@ -174,30 +114,6 @@
             <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-core</artifactId>
             <version>${log4j.version}</version>
-            <scope>provided</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.commons</groupId>
-            <artifactId>commons-lang3</artifactId>
-            <version>${commons-lang3.version}</version>
-            <scope>provided</scope>
-        </dependency>
-        <dependency>
-            <groupId>commons-io</groupId>
-            <artifactId>commons-io</artifactId>
-            <version>${commons-io.version}</version>
-            <scope>provided</scope>
-        </dependency>
-        <dependency>
-            <groupId>xpp3</groupId>
-            <artifactId>xpp3</artifactId>
-            <version>${xpp3.version}</version>
-            <scope>provided</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.mozilla</groupId>
-            <artifactId>rhino</artifactId>
-            <version>${rhino.version}</version>
             <scope>provided</scope>
         </dependency>
         <dependency>

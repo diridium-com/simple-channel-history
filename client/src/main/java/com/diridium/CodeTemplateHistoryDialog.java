@@ -12,7 +12,6 @@ import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.text.SimpleDateFormat;
-import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 
@@ -32,12 +31,8 @@ import javax.swing.KeyStroke;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.mirth.connect.client.ui.Frame;
 import com.mirth.connect.client.ui.PlatformUI;
-import com.mirth.connect.model.converters.ObjectXMLSerializer;
 
 /**
  * Dialog for viewing code template version history.
@@ -45,7 +40,6 @@ import com.mirth.connect.model.converters.ObjectXMLSerializer;
  * @author Kiran Ayyagari (kayyagari@apache.org)
  */
 public class CodeTemplateHistoryDialog extends JDialog {
-    private static final Logger log = LoggerFactory.getLogger(CodeTemplateHistoryDialog.class);
 
     private final String codeTemplateId;
     private final String codeTemplateName;
@@ -58,7 +52,7 @@ public class CodeTemplateHistoryDialog extends JDialog {
         super(parent, "Version History - " + codeTemplateName, true);
         this.codeTemplateId = codeTemplateId;
         this.codeTemplateName = codeTemplateName;
-        ObjectXMLSerializer.getInstance().allowTypes(Collections.emptyList(), Collections.singletonList(RevisionInfo.class.getPackage().getName() + ".**"), Collections.emptyList());
+        AllowedTypes.register();
 
         initComponents();
         loadHistory();

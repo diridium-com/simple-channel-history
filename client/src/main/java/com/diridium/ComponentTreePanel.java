@@ -66,11 +66,6 @@ public class ComponentTreePanel extends JPanel {
     private ComponentSelectionListener listener;
 
     public ComponentTreePanel(Map<String, DecomposedComponent> leftComponents,
-                              Map<String, DecomposedComponent> rightComponents) {
-        this(leftComponents, rightComponents, null, null);
-    }
-
-    public ComponentTreePanel(Map<String, DecomposedComponent> leftComponents,
                               Map<String, DecomposedComponent> rightComponents,
                               Map<String, String> leftGroupDisplayNames,
                               Map<String, String> rightGroupDisplayNames) {

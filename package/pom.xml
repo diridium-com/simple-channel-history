@@ -60,10 +60,11 @@
                         <configuration><nodeVersion>v24.21.0</nodeVersion></configuration>
                     </execution>
                     <execution>
-                        <id>npm-install</id>
+                        <id>npm-ci</id>
                         <phase>generate-resources</phase>
                         <goals><goal>npm</goal></goals>
-                        <configuration><arguments>install</arguments></configuration>
+                        <!-- ci installs exactly what package-lock.json says, and fails if the two disagree. -->
+                        <configuration><arguments>ci</arguments></configuration>
                     </execution>
                     <execution>
                         <id>npm-build-webadmin</id>

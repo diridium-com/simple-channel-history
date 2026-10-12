@@ -4,9 +4,9 @@
 
 package com.diridium;
 
-import java.text.DateFormat;
-import java.text.SimpleDateFormat;
-import java.util.Date;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 import javax.swing.table.AbstractTableModel;
@@ -18,7 +18,8 @@ public class RevisionInfoTableModel extends AbstractTableModel {
 
     private final List<RevisionInfo> revisions;
 
-    private static final DateFormat df = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+    // DateTimeFormatter is thread-safe, unlike the SimpleDateFormat a shared static would otherwise be.
+    private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private static final String[] columnNames = {"Revision", "User", "Date"};
 
@@ -59,14 +60,14 @@ public class RevisionInfoTableModel extends AbstractTableModel {
     private String formatTime(long t) {
         long elapsed = System.currentTimeMillis() - t;
         if (elapsed < 0) {
-            return df.format(new Date(t));
+            return TIME_FORMAT.format(Instant.ofEpochMilli(t).atZone(ZoneId.systemDefault()));
         }
 
         long seconds = elapsed / 1000;
         long minutes = seconds / 60;
 
         if (minutes >= 60) {
-            return df.format(new Date(t));
+            return TIME_FORMAT.format(Instant.ofEpochMilli(t).atZone(ZoneId.systemDefault()));
         } else if (minutes > 0) {
             return minutes + (minutes == 1 ? " minute ago" : " minutes ago");
         } else {

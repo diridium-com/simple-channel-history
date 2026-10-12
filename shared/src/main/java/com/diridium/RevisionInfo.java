@@ -12,7 +12,6 @@ public class RevisionInfo {
     private int revision; // channel/code template revision number
     private String committerName;
     private long time; // UTC, always
-    private String message;
 
     public RevisionInfo() {
     }
@@ -21,13 +20,9 @@ public class RevisionInfo {
         return hash;
     }
 
+    /** How the administrators label a revision: "Rev" and the item's revision number. */
     public String getShortHash() {
-        // For database IDs, show "Rev N" format
-        if (hash != null && hash.matches("\\d+")) {
-            return "Rev " + revision;
-        }
-        // Fallback for legacy git hashes
-        return hash != null && hash.length() >= 8 ? hash.substring(0, 8) : hash;
+        return "Rev " + revision;
     }
 
     public void setHash(String hash) {
@@ -56,13 +51,5 @@ public class RevisionInfo {
 
     public void setTime(long time) {
         this.time = time;
-    }
-
-    public String getMessage() {
-        return message;
-    }
-
-    public void setMessage(String message) {
-        this.message = message;
     }
 }

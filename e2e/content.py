@@ -17,7 +17,7 @@ from oie import ApiError
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
-CHANNEL_FIXTURE = os.path.join(REPO, "shared", "src", "main", "resources", "channel-for-diffing-version1.xml")
+CHANNEL_FIXTURE = os.path.join(REPO, "client", "src", "test", "resources", "channel-for-diffing-version1.xml")
 TEMPLATE_FIXTURE = os.path.join(HERE, "fixtures", "code-template.xml")
 EXT = "/extensions/simple-channel-history"
 PLUGIN_PATH = "simple-channel-history"
