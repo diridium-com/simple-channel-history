@@ -10,6 +10,7 @@ the OIE #296 scenario.
 import hashlib
 import os
 import re
+import time
 import zipfile
 
 import content as c
@@ -85,7 +86,13 @@ def check_tables_created_once(r, engine):
 def check_revert_event(r, api, label, kind, item_id, revision):
     """The plugin's event for a revert names the revision reverted to, the user who reverted, and their address."""
     key = "channel" if kind == "channel" else "Code Template ID"
-    event = next((e for e in c.plugin_events(api) if "Reverted to revision" in e and item_id in (e.get(key) or "")), None)
+    # The engine writes events from a queue, so the revert's event can arrive a moment after the revert returns.
+    deadline = time.time() + 15
+    while True:
+        event = next((e for e in c.plugin_events(api) if "Reverted to revision" in e and item_id in (e.get(key) or "")), None)
+        if event is not None or time.time() > deadline:
+            break
+        time.sleep(1)
     me = c.current_user_id(api)
     r.check(f"{label}'s revert event names revision {revision}, user {me} and an address",
             event is not None and event["Reverted to revision"] == revision and event["userId"] == me
