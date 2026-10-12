@@ -7,14 +7,14 @@ Every release is signed. CI builds an unsigned draft, the signed build is made w
 
 ## 1. Bump the version
 
-Change all of these in the commit you tag:
+Change all of these in the commit you tag. The release workflow fails, naming each file, if any of them does not match the tag:
 
 - `<revision>` in the parent `pom.xml`
-- `version` in `oie.json` (the release workflow fails if it does not match the tag)
+- `version` in `oie.json`
 - `version` in `webadmin/plugin.json`
 - `version` in `webadmin/package.json`, and the two root entries in `webadmin/package-lock.json`
 
-CI stamps the tag into the build on its own, but the signed build is made from the committed files, so they have to agree.
+CI builds the committed files as they are, the same way the signed build does.
 
 ## 2. Tag
 
@@ -22,7 +22,7 @@ CI stamps the tag into the build on its own, but the signed build is made from t
 git tag vX.Y.Z && git push origin vX.Y.Z
 ```
 
-`.github/workflows/release.yml` builds against the OIE distribution named by `OIE_TAG` and stages a **draft** release holding the unsigned `simple-channel-history-X.Y.Z.zip` and its `.sha256` sidecar. CI never publishes it.
+`.github/workflows/release.yml` builds and tests against the OIE release named by the POM's `mc.version` and stages a **draft** release holding the unsigned `simple-channel-history-X.Y.Z.zip` and its `.sha256` sidecar. CI never publishes it. It refuses a tag whose release is already published, so a re-run cannot put the unsigned zip over the signed one.
 
 ## 3. Build the signed zip
 

@@ -47,7 +47,7 @@ jobs:
       - name: Resolve the engine version from the POM
         id: engine
         run: |
-          MC_VERSION="$(mvn -q -N help:evaluate -Dexpression=mc.version -DforceStdout)"
+          MC_VERSION="$(mvn -q -N org.apache.maven.plugins:maven-help-plugin:3.5.1:evaluate -Dexpression=mc.version -DforceStdout)"
           if [ -z "$MC_VERSION" ]; then
             echo "::error::Could not read mc.version from pom.xml"
             exit 1
@@ -96,7 +96,7 @@ jobs:
           tar xzf "$OIE_TARBALL" "${members[@]}"
           for entry in "${JARS[@]}"; do
             IFS=':' read -r group artifact rel <<< "$entry"
-            mvn -B -ntp -q install:install-file -Dfile="oie/$rel" -DgroupId="$group" \
+            mvn -B -ntp -q org.apache.maven.plugins:maven-install-plugin:3.1.4:install-file -Dfile="oie/$rel" -DgroupId="$group" \
               -DartifactId="$artifact" -Dversion="$MC_VERSION" -Dpackaging=jar
           done
 

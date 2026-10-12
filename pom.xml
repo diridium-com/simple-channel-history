@@ -20,6 +20,12 @@
         <plugin.supported.mc.versions>${mc.version}</plugin.supported.mc.versions>
 
         <mc.version>4.6.0</mc.version>
+        <!-- These provided versions are not all the ones OIE 4.6.0 ships (MyBatis 3.5.9 here,
+             3.1.1 in the engine, among others). They never reach a user: provided jars are not
+             in the zip, and the plugin runs on the engine's own copies. The risk is new code
+             calling a method the engine's version lacks. The unit tests would not catch that,
+             since they run on these versions, but the e2e suite (e2e/run.py) runs on the
+             engine's real jars and would. Left as is on purpose (#26). -->
         <ognl.version>3.2.15</ognl.version>
         <javax-servlet.version>4.0.1</javax-servlet.version>
         <javax-rs-api.version>2.0.1</javax-rs-api.version>
@@ -36,6 +42,8 @@
         <mybatis.version>3.5.9</mybatis.version>
 
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!-- Fixed entry times in the jars, so the same source builds the same bytes. -->
+        <project.build.outputTimestamp>2026-10-12T00:00:00Z</project.build.outputTimestamp>
 
         <!-- Signing disabled by default. Use -Psigning to enable. -->
         <signing.skip>true</signing.skip>
@@ -62,13 +70,6 @@
         <name>Diridium Technologies Inc.</name>
         <url>https://github.com/pacmano1/simple-channel-history</url>
     </organization>
-
-    <repositories>
-        <repository>
-            <id>mirth-libs</id>
-            <url>https://repo.repsy.io/mvn/kpalang/mirthconnect</url>
-        </repository>
-    </repositories>
 
     <dependencies>
         <dependency>
@@ -253,12 +254,17 @@
                     <release>17</release>
                 </configuration>
             </plugin>
+            <!-- 3.2.0 or later honours project.build.outputTimestamp. The default entries
+                 (Built-By among them) are left out: they record the build machine's user. -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>
-                <version>3.0.2</version>
+                <version>3.4.2</version>
                 <configuration>
                     <archive>
+                        <manifest>
+                            <addDefaultEntries>false</addDefaultEntries>
+                        </manifest>
                         <manifestEntries>
                             <Application-Name>Simple Channel History</Application-Name>
                             <url>${project.url}</url>

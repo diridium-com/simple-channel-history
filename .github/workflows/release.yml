@@ -1,17 +1,22 @@
-# Builds the plugin against a downloaded OIE distribution on a semver tag and stages
-# a DRAFT GitHub Release with the unsigned zip + .sha256 sidecar.
+# Builds and tests the plugin against a downloaded OIE distribution on a semver tag and
+# stages a DRAFT GitHub Release with the unsigned zip + .sha256 sidecar.
 #
-#   git tag v2.8.0 && git push origin v2.8.0
+#   git tag v2.8.1 && git push origin v2.8.1
 #
 # The draft is never published by CI. Release flow from here (see RELEASING.md):
 # build and sign locally (YubiKey, -Psigning), replace the draft's zip AND regenerate
 # its .sha256 sidecar from the signed zip, publish by hand, then submit the published
 # release to the community catalog.
 #
-# The tag drives the version stamped into the build (-Drevision → pom/${project.version},
-# so plugin.xml pluginVersion + the library jar names) and webadmin/plugin.json; oie.json
-# is verified to match the tag. The engine version comes from the POM's mc.version (see
-# build.yml for why it is not hardcoded here).
+# The tag must match the version in every file that carries it (RELEASING.md, step 1),
+# so CI builds the committed files as they are, the same way the signed build does, and
+# plugin.xml's pluginVersion (what the engine reports as "installed") matches oie.json,
+# keeping the store's update detection accurate. The engine version comes from the POM's
+# mc.version (see build.yml for why it is not hardcoded here).
+#
+# A tag whose release is already published is refused, so re-running this workflow can
+# never replace a published release's files with an unsigned build. An existing draft is
+# updated: publishing it is the last, manual step.
 
 name: Release
 
@@ -36,13 +41,45 @@ jobs:
           java-version: '17'
           cache: maven
 
-      - name: Resolve and verify version
+      - name: Refuse a tag whose release is already published
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if DRAFT="$(gh release view "$GITHUB_REF_NAME" --json isDraft -q .isDraft 2>&1)"; then
+            if [ "$DRAFT" != "true" ]; then
+              echo "::error::Release ${GITHUB_REF_NAME} is already published. Its files are never replaced; release a new version."
+              exit 1
+            fi
+            echo "A draft exists for ${GITHUB_REF_NAME}; it will be updated."
+          elif [ "$DRAFT" = "release not found" ]; then
+            echo "No release exists for ${GITHUB_REF_NAME} yet."
+          else
+            # Anything else (network, permissions) must not be taken for "no release".
+            echo "::error::Could not check for an existing release: $DRAFT"
+            exit 1
+          fi
+
+      - name: Check the tag against every version file
         id: ver
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          MANIFEST_VERSION="$(jq -r .version oie.json)"; MANIFEST_VERSION="${MANIFEST_VERSION#v}"
-          if [ "$VERSION" != "$MANIFEST_VERSION" ]; then
-            echo "::error::Tag ${GITHUB_REF_NAME} implies version $VERSION but oie.json says $MANIFEST_VERSION"
+          HELP=org.apache.maven.plugins:maven-help-plugin:3.5.1
+          check() {
+            if [ "$2" != "$VERSION" ]; then
+              echo "::error::Tag ${GITHUB_REF_NAME} is version ${VERSION}, but $1 says '$2'."
+              FAILED=1
+            fi
+          }
+          FAILED=0
+          check "pom.xml <revision>" "$(mvn -q -N "$HELP:evaluate" -Dexpression=revision -DforceStdout)"
+          check "oie.json version" "$(jq -r .version oie.json)"
+          check "webadmin/plugin.json version" "$(jq -r .version webadmin/plugin.json)"
+          check "webadmin/package.json version" "$(jq -r .version webadmin/package.json)"
+          check "webadmin/package-lock.json version" "$(jq -r .version webadmin/package-lock.json)"
+          check "webadmin/package-lock.json packages[\"\"].version" \
+            "$(jq -r '.packages[""].version' webadmin/package-lock.json)"
+          if [ "$FAILED" -ne 0 ]; then
+            echo "Set the version in every file listed above (RELEASING.md, step 1) and tag again."
             exit 1
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
@@ -50,7 +87,7 @@ jobs:
       - name: Resolve the engine version from the POM
         id: engine
         run: |
-          MC_VERSION="$(mvn -q -N help:evaluate -Dexpression=mc.version -DforceStdout)"
+          MC_VERSION="$(mvn -q -N org.apache.maven.plugins:maven-help-plugin:3.5.1:evaluate -Dexpression=mc.version -DforceStdout)"
           if [ -z "$MC_VERSION" ]; then
             echo "::error::Could not read mc.version from pom.xml"
             exit 1
@@ -99,20 +136,22 @@ jobs:
             IFS=':' read -r group artifact rel <<< "$entry"
             jar="$GITHUB_WORKSPACE/oie/$rel"
             test -f "$jar" || { echo "::error::missing engine jar $rel in the OIE distribution"; exit 1; }
-            mvn -B -ntp install:install-file -Dfile="$jar" -DgroupId="$group" \
+            mvn -B -ntp org.apache.maven.plugins:maven-install-plugin:3.1.4:install-file -Dfile="$jar" -DgroupId="$group" \
               -DartifactId="$artifact" -Dversion="$MC_VERSION" -Dpackaging=jar
           done
 
-      - name: Stamp version (webadmin manifest)
-        run: |
-          VERSION="${{ steps.ver.outputs.version }}"
-          jq --arg v "$VERSION" '.version = $v' webadmin/plugin.json > webadmin/plugin.json.tmp && mv webadmin/plugin.json.tmp webadmin/plugin.json
+      # Signing is skipped by default (no keystore in CI).
+      - name: Build and test
+        run: mvn -B -ntp package
 
-      - name: Build extension
-        # -Drevision drives ${project.version}: plugin.xml pluginVersion, the library
-        # jar names, and the zip name (simple-channel-history-<version>.zip). Signing
-        # is skipped by default (no keystore in CI).
-        run: mvn -B -ntp -DskipTests -Drevision="${{ steps.ver.outputs.version }}" package
+      - name: Confirm tests actually ran
+        run: |
+          reports=$(find . -path '*/target/surefire-reports/*.xml' | wc -l)
+          if [ "$reports" -eq 0 ]; then
+            echo "::error::No surefire reports were produced. The test suite did not run."
+            exit 1
+          fi
+          echo "surefire report files: $reports"
 
       - name: Stage the release asset and checksum
         id: pkg
@@ -130,8 +169,9 @@ jobs:
 
       - name: Create DRAFT GitHub Release with assets
         # Stays a draft: the zip is unsigned. A human signs locally, replaces the
-        # zip and its .sha256 sidecar, and publishes (see RELEASING.md).
-        uses: softprops/action-gh-release@v2
+        # zip and its .sha256 sidecar, and publishes (see RELEASING.md). Pinned
+        # to v2.6.2 by commit.
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
         with:
           draft: true
           files: |
