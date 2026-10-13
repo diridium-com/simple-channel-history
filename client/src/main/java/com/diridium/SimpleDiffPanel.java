@@ -11,6 +11,7 @@ import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
+import java.awt.Rectangle;
 import java.awt.event.AdjustmentEvent;
 import java.awt.event.AdjustmentListener;
 import java.awt.geom.Rectangle2D;
@@ -175,10 +176,12 @@ public class SimpleDiffPanel extends JPanel {
                 }
                 int[] offsets = lineOffsets.get(i);
                 try {
-                    Rectangle2D r = modelToView2D(offsets[0]);
-                    if (r != null) {
+                    Rectangle2D view = modelToView2D(offsets[0]);
+                    if (view != null) {
+                        // getBounds rounds outward, the whole pixels the deprecated modelToView gave.
+                        Rectangle r = view.getBounds();
                         g.setColor(color);
-                        g.fillRect(0, (int) r.getY(), getWidth(), (int) Math.ceil(r.getHeight()));
+                        g.fillRect(0, r.y, getWidth(), r.height);
                     }
                 } catch (BadLocationException e) {
                     // skip

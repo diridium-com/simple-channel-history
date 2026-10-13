@@ -121,6 +121,13 @@ jobs:
           fi
           echo "surefire report files: $reports"
 
+      # Nothing else loads the CLIENT libraries plugin.xml names; only the Swing Administrator does.
+      - name: Check the zip has every library plugin.xml names
+        run: |
+          zips=(package/target/simple-channel-history-*.zip)
+          [ "${#zips[@]}" -eq 1 ] || { echo "::error::expected one plugin zip, found ${#zips[@]}"; exit 1; }
+          bash scripts/check-zip-libraries.sh "${zips[0]}"
+
       - name: Upload the plugin zip for the e2e job
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:

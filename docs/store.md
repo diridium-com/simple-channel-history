@@ -11,9 +11,9 @@ classic Swing Administrator and the OIE web administrator, with full feature par
   (channel scripts, source/destination connectors, filter and transformer steps,
   plugin properties, destination order) with color-coded change indicators, plus a
   side-by-side XML diff with inline highlighting. Toggle to a raw-XML diff any time.
-- **Revert**: roll a channel or code template back to any previous revision (a
-  revert-history note is appended to the description). A channel keeps its enabled or
-  disabled state, message pruning settings and tags as they are now.
+- **Revert**: roll a channel or code template back to any previous revision. A channel
+  gets a revert-history note in its description, and keeps its enabled or disabled
+  state, message pruning settings and tags as they are now.
 - **Prune**: delete revisions older than a chosen point to reclaim space.
 - **Deleted items**: when a channel or code template is deleted, a final XML
   snapshot is captured. A *Channel History: Deleted Items* settings tab lists them

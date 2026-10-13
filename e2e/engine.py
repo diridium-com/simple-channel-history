@@ -16,10 +16,21 @@ import zipfile
 from oie import Api, ApiError
 
 
+def free_ports(count):
+    """count different ports that are free now. The sockets stay open until all are chosen, so the
+    system can't hand out the same port twice."""
+    sockets = [socket.socket() for _ in range(count)]
+    try:
+        for s in sockets:
+            s.bind(("127.0.0.1", 0))
+        return [s.getsockname()[1] for s in sockets]
+    finally:
+        for s in sockets:
+            s.close()
+
+
 def free_port():
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
+    return free_ports(1)[0]
 
 
 def unpack(tarball, dest):
@@ -71,15 +82,15 @@ class Engine:
         self._set_ports()
 
     def _set_ports(self):
-        self.port = free_port()
+        self.port, http_port = free_ports(2)
         set_properties(os.path.join(self.home, "conf", "mirth.properties"),
-                       {"https.port": str(self.port), "http.port": str(free_port())})
+                       {"https.port": str(self.port), "http.port": str(http_port)})
 
     def start(self):
         try:
             return self._start()
         except ApiError:
-            # free_port only finds a port that was free a moment ago. If something took it before the
+            # free_ports only finds ports that were free a moment ago. If something took one before the
             # engine bound it, try once more on new ports.
             if not self.last_start_lost_port:
                 raise

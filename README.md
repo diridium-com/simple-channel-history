@@ -65,11 +65,12 @@ Signed builds require a YubiKey with a code signing certificate and the OpenSC P
 
 1. Copy `yubikey-pkcs11.cfg.example` to `yubikey-pkcs11.cfg` and update the library path for your system
 2. Create `certchain.pem` containing your certificate chain (your cert + intermediate CA + root CA in PEM format)
-3. Build with the signing profile. The build reads the PIN from `YUBIKEY_PIN`, and `read -s` takes it without echoing it or leaving it in your shell history (bash or zsh):
+3. Build with the signing profile. `read -s` takes the PIN without echoing it or leaving it in your shell history (bash or zsh). The variable isn't exported, so only Maven gets the PIN, not the processes the build starts (npm, and the install scripts it runs):
 
 ```bash
-read -rs YUBIKEY_PIN && export YUBIKEY_PIN
-mvn clean package -Psigning
+read -rs PIN
+mvn clean package -Psigning -Dsigning.storepass="$PIN"
+unset PIN
 ```
 
 The plugin zip will be in `package/target/simple-channel-history-<version>.zip`.
@@ -78,7 +79,7 @@ The plugin zip will be in `package/target/simple-channel-history-<version>.zip`.
 
 `e2e/run.py` installs a built zip into the released OIE engine through the engine's own installer and checks the plugin on a real database: a fresh install, an upgrade from each release in `e2e/upgrade-sources.txt`, an uninstall, and an install alongside [Role-Based Access Control](https://github.com/diridium-com/role-based-access-control) (the release in `e2e/rbac-source.txt`), where a role limited to some channels must see only those channels' deleted snapshots. CI runs it on every push and pull request against Derby, PostgreSQL, MySQL, SQL Server (jTDS and Microsoft drivers) and Oracle.
 
-Locally it needs Java 17, Docker for every database but Derby, and the OIE distribution tarball (`scripts/install-engine-jars.sh` leaves a checked copy in `target/oie-dist/`):
+Locally it needs Java 17, Docker for every database but Derby, and the OIE distribution tarball. `scripts/install-engine-jars.sh` leaves a checked copy in `target/oie-dist/`; a `mvn clean` of the whole project deletes it, so run the script again after one:
 
 ```bash
 python3 e2e/run.py --db postgres --zip package/target/simple-channel-history-<version>.zip \

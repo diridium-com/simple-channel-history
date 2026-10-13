@@ -407,8 +407,8 @@ def uninstall(r, engine, db, dbname, new_zip, **_):
 
 def rbac(r, engine, db, dbname, new_zip, rbac_zip, **_):
     """rbac installed alongside. A role limited to some channels must see and handle only those channels'
-    deleted snapshots, and a role without "manage channels" gets no deleted channels at all. Admin is the control.
-    Before 2.8.1 the deleted-channel endpoints ignored channel restrictions."""
+    deleted snapshots. Admin is the control. Before 2.8.1 the deleted-channel endpoints ignored channel
+    restrictions. What a role without "manage channels" gets is recorded as a NOTE, not checked."""
     api = engine.start()
     for z in (new_zip, rbac_zip):
         ok, detail = c.install(api, z)
