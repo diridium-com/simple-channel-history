@@ -51,6 +51,9 @@ public class ChannelHistoryDialog extends JDialog {
     private ChannelHistoryServletInterface servlet;
     private JButton btnShowDiff;
     private JButton btnRevert;
+    // Actions the user's role can't use are hidden rather than refused after a confirmation.
+    private final boolean canRevert = RoleAccess.allows(ChannelHistoryTasks.REVERT_CHANNEL);
+    private final boolean canPrune = RoleAccess.allows(ChannelHistoryTasks.PRUNE_CHANNEL_HISTORY);
 
     public ChannelHistoryDialog(JFrame parent, String channelId, String channelName) {
         super(parent, "Version History - " + channelName, true);
@@ -120,7 +123,7 @@ public class ChannelHistoryDialog extends JDialog {
             }
 
             private void handlePopup(MouseEvent e) {
-                if (e.isPopupTrigger()) {
+                if (e.isPopupTrigger() && canPrune) {
                     int row = tblRevisions.rowAtPoint(e.getPoint());
                     if (row >= 0 && !tblRevisions.isRowSelected(row)) {
                         tblRevisions.setRowSelectionInterval(row, row);
@@ -145,8 +148,8 @@ public class ChannelHistoryDialog extends JDialog {
         JLabel helpLabel = new JLabel(new ImageIcon(Frame.class.getResource("images/help.png")));
         String helpText = "<html>" +
                 "<b>Double-click</b> a revision to compare with previous<br>" +
-                "<b>Ctrl/Cmd-click</b> to select two revisions, then Show Diff<br>" +
-                "<b>Right-click</b> for prune option" +
+                "<b>Ctrl/Cmd-click</b> to select two revisions, then Show Diff" +
+                (canPrune ? "<br><b>Right-click</b> for prune option" : "") +
                 "</html>";
         helpLabel.setToolTipText(helpText);
         helpLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
@@ -174,6 +177,7 @@ public class ChannelHistoryDialog extends JDialog {
         btnRevert = new JButton("Revert to Selected");
         btnRevert.setEnabled(false);
         btnRevert.addActionListener(e -> revertToSelected());
+        btnRevert.setVisible(canRevert);
         buttonPanel.add(btnRevert);
 
         JButton btnClose = new JButton("Close");
@@ -205,7 +209,7 @@ public class ChannelHistoryDialog extends JDialog {
                 toFront();
                 requestFocus();
             } catch (Exception e) {
-                PlatformUI.MIRTH_FRAME.alertThrowable(PlatformUI.MIRTH_FRAME, e);
+                RoleAccess.alertFailure(this, e, "You don't have permission to view this channel's history.");
             }
         });
     }
@@ -243,7 +247,7 @@ public class ChannelHistoryDialog extends JDialog {
                 DiffWindow.showOverAdministrator(dw);
             }
         } catch (Exception e) {
-            PlatformUI.MIRTH_FRAME.alertThrowable(PlatformUI.MIRTH_FRAME, e);
+            RoleAccess.alertFailure(this, e, "You don't have permission to view this channel's history.");
         }
     }
 
@@ -297,7 +301,7 @@ public class ChannelHistoryDialog extends JDialog {
                 loadHistory();
             }
         } catch (Exception e) {
-            PlatformUI.MIRTH_FRAME.alertThrowable(PlatformUI.MIRTH_FRAME, e);
+            RoleAccess.alertFailure(this, e, "You don't have permission to revert this channel.");
         }
     }
 
@@ -332,7 +336,7 @@ public class ChannelHistoryDialog extends JDialog {
             PlatformUI.MIRTH_FRAME.alertInformation(this, "Deleted " + deleted + " older revision(s).");
             loadHistory();
         } catch (Exception e) {
-            PlatformUI.MIRTH_FRAME.alertThrowable(PlatformUI.MIRTH_FRAME, e);
+            RoleAccess.alertFailure(this, e, "You don't have permission to prune this channel's history.");
         }
     }
 }

@@ -41,6 +41,28 @@ export function makeApi(api) {
     };
 }
 
+/* ---- what the user's role allows (ChannelHistoryTasks, 1:1) ---------------- */
+
+// The plugin's task names, which the server registers with the engine permissions they need. With
+// Role-Based Access Control the host's checkTask resolves them, so the UI hides actions the server
+// would refuse. Without it every task is allowed. The server checks the permissions either way.
+export const TASK_GROUP = 'Simple Channel History';
+export const TASKS = {
+    REVERT_CHANNEL: 'doRevertChannel',
+    PRUNE_CHANNEL_HISTORY: 'doPruneChannelHistory',
+    VIEW_DELETED_CHANNELS: 'doViewDeletedChannels',
+    REVERT_CODE_TEMPLATE: 'doRevertCodeTemplate',
+    PRUNE_CODE_TEMPLATE_HISTORY: 'doPruneCodeTemplateHistory',
+    VIEW_DELETED_CODE_TEMPLATES: 'doViewDeletedCodeTemplates'
+};
+// The Deleted Items tab. The host names its task group after it, settings_<tab>.
+export const DELETED_ITEMS_TAB = 'Channel History: Deleted Items';
+
+export function allows(platform, task) {
+    if (typeof platform.checkTask !== 'function') return true;
+    return platform.checkTask(TASK_GROUP, task) !== false;
+}
+
 /* ---- time formatting (RevisionInfoTableModel.formatTime, 1:1) -------------- */
 
 function pad(n) { return String(n).padStart(2, '0'); }

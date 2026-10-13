@@ -35,7 +35,6 @@ import org.jdesktop.swingx.decorator.HighlighterFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.mirth.connect.client.core.ForbiddenException;
 import com.mirth.connect.client.ui.AbstractSettingsPanel;
 import com.mirth.connect.client.ui.PlatformUI;
 import com.mirth.connect.client.ui.UIConstants;
@@ -166,8 +165,14 @@ public class DeletedItemsSettingsPanel extends AbstractSettingsPanel {
 
     @Override
     public void doRefresh() {
-        // A list that fails to load is said so on the panel, rather than shown as an empty list.
+        // A list that fails to load is said so on the panel, rather than shown as an empty list. A list the
+        // user's role doesn't cover isn't requested at all.
         List<String> failures = new ArrayList<>();
+        boolean loadChannels = RoleAccess.allows(ChannelHistoryTasks.VIEW_DELETED_CHANNELS);
+        boolean loadCodeTemplates = RoleAccess.allows(ChannelHistoryTasks.VIEW_DELETED_CODE_TEMPLATES);
+        if (!loadChannels && !loadCodeTemplates) {
+            failures.add("You don't have permission to see deleted channels or code templates.");
+        }
         new SwingWorker<List<DeletedItemInfo>, Void>() {
             @Override
             protected List<DeletedItemInfo> doInBackground() throws Exception {
@@ -177,25 +182,29 @@ public class DeletedItemsSettingsPanel extends AbstractSettingsPanel {
                     failures.add("Deleted items could not be loaded.");
                     return all;
                 }
-                try {
-                    List<DeletedItemInfo> channels = svc.getDeletedChannels();
-                    for (DeletedItemInfo info : channels) {
-                        info.setType(DeletedItemInfo.TYPE_CHANNEL);
+                if (loadChannels) {
+                    try {
+                        List<DeletedItemInfo> channels = svc.getDeletedChannels();
+                        for (DeletedItemInfo info : channels) {
+                            info.setType(DeletedItemInfo.TYPE_CHANNEL);
+                        }
+                        all.addAll(channels);
+                    } catch (Exception e) {
+                        log.error("Failed to load deleted channels", e);
+                        failures.add("Deleted channels could not be loaded: " + describe(e));
                     }
-                    all.addAll(channels);
-                } catch (Exception e) {
-                    log.error("Failed to load deleted channels", e);
-                    failures.add("Deleted channels could not be loaded: " + describe(e));
                 }
-                try {
-                    List<DeletedItemInfo> codeTemplates = svc.getDeletedCodeTemplates();
-                    for (DeletedItemInfo info : codeTemplates) {
-                        info.setType(DeletedItemInfo.TYPE_CODE_TEMPLATE);
+                if (loadCodeTemplates) {
+                    try {
+                        List<DeletedItemInfo> codeTemplates = svc.getDeletedCodeTemplates();
+                        for (DeletedItemInfo info : codeTemplates) {
+                            info.setType(DeletedItemInfo.TYPE_CODE_TEMPLATE);
+                        }
+                        all.addAll(codeTemplates);
+                    } catch (Exception e) {
+                        log.error("Failed to load deleted code templates", e);
+                        failures.add("Deleted code templates could not be loaded: " + describe(e));
                     }
-                    all.addAll(codeTemplates);
-                } catch (Exception e) {
-                    log.error("Failed to load deleted code templates", e);
-                    failures.add("Deleted code templates could not be loaded: " + describe(e));
                 }
                 // Sort newest-first
                 all.sort((a, b) -> Long.compare(b.getDateDeleted(), a.getDateDeleted()));
@@ -219,10 +228,8 @@ public class DeletedItemsSettingsPanel extends AbstractSettingsPanel {
 
     /** A short reason for a failed request: a refused permission in words, anything else as its message. */
     private static String describe(Throwable e) {
-        for (Throwable t = e; t != null; t = t.getCause()) {
-            if (t instanceof ForbiddenException) {
-                return "you are not authorized to view them.";
-            }
+        if (RoleAccess.isRefusal(e)) {
+            return "you are not authorized to view them.";
         }
         return e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
     }
@@ -319,7 +326,7 @@ public class DeletedItemsSettingsPanel extends AbstractSettingsPanel {
                 DiffWindow.showOverAdministrator(dw);
             }
         } catch (Exception e) {
-            PlatformUI.MIRTH_FRAME.alertThrowable(PlatformUI.MIRTH_FRAME, e);
+            RoleAccess.alertFailure(this, e, "You don't have permission to view these snapshots.");
         }
     }
 
@@ -365,7 +372,7 @@ public class DeletedItemsSettingsPanel extends AbstractSettingsPanel {
                 DiffWindow.showOverAdministrator(dw);
             }
         } catch (Exception e) {
-            PlatformUI.MIRTH_FRAME.alertThrowable(PlatformUI.MIRTH_FRAME, e);
+            RoleAccess.alertFailure(this, e, "You don't have permission to view this snapshot.");
         }
     }
 
@@ -394,7 +401,7 @@ public class DeletedItemsSettingsPanel extends AbstractSettingsPanel {
             // server's encryption.export setting is on, as an exported channel or code template is.
             PlatformUI.MIRTH_FRAME.exportFile(xml, info.getName(), "XML", "Deleted " + info.getType().toLowerCase() + " snapshot");
         } catch (Exception e) {
-            PlatformUI.MIRTH_FRAME.alertThrowable(PlatformUI.MIRTH_FRAME, e);
+            RoleAccess.alertFailure(this, e, "You don't have permission to download this snapshot.");
         }
     }
 
@@ -424,7 +431,7 @@ public class DeletedItemsSettingsPanel extends AbstractSettingsPanel {
             }
             doRefresh();
         } catch (Exception e) {
-            PlatformUI.MIRTH_FRAME.alertThrowable(PlatformUI.MIRTH_FRAME, e);
+            RoleAccess.alertFailure(this, e, "You don't have permission to purge this snapshot.");
         }
     }
 

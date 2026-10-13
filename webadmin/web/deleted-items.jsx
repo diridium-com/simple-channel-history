@@ -6,7 +6,7 @@
  * Show Diff (two same-type items), Download XML, and Purge.
  */
 
-import { makeApi, formatDateTime } from './schi-core.js';
+import { makeApi, formatDateTime, allows, TASKS, DELETED_ITEMS_TAB } from './schi-core.js';
 import { openView, openDiff } from './diff-window.js';
 
 const TYPE_CHANNEL = 'Channel';
@@ -35,14 +35,15 @@ export function registerDeletedItems(platform) {
 
         const load = React.useCallback(async () => {
             setLoading(true);
-            // Each list loads on its own: a user may be allowed one and refused the other.
+            // Each list loads on its own: a user may be allowed one and refused the other. A list the
+            // user's role doesn't cover isn't requested at all.
             const lists = [
-                [TYPE_CHANNEL, 'Deleted channels', api.getDeletedChannels()],
-                [TYPE_CODE_TEMPLATE, 'Deleted code templates', api.getDeletedCodeTemplates()]
-            ];
-            const results = await Promise.allSettled(lists.map(([, , request]) => request));
+                [TYPE_CHANNEL, 'Deleted channels', TASKS.VIEW_DELETED_CHANNELS, () => api.getDeletedChannels()],
+                [TYPE_CODE_TEMPLATE, 'Deleted code templates', TASKS.VIEW_DELETED_CODE_TEMPLATES, () => api.getDeletedCodeTemplates()]
+            ].filter(([, , task]) => allows(platform, task));
+            const results = await Promise.allSettled(lists.map(([, , , request]) => request()));
             const merged = [];
-            const failed = [];
+            const failed = lists.length ? [] : ["You don't have permission to see deleted channels or code templates."];
             results.forEach((result, i) => {
                 const [type, label] = lists[i];
                 if (result.status === 'fulfilled') merged.push(...result.value.map((x) => ({ ...x, type })));
@@ -215,5 +216,6 @@ export function registerDeletedItems(platform) {
         );
     }
 
-    platform.registerSettingsPanel({ label: 'Channel History: Deleted Items', component: DeletedItemsPanel });
+    // The label is also the tab's task group, which the server registers with a permission.
+    platform.registerSettingsPanel({ label: DELETED_ITEMS_TAB, component: DeletedItemsPanel });
 }

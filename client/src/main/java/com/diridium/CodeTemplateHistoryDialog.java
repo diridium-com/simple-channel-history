@@ -47,6 +47,9 @@ public class CodeTemplateHistoryDialog extends JDialog {
     private ChannelHistoryServletInterface servlet;
     private JButton btnShowDiff;
     private JButton btnRevert;
+    // Actions the user's role can't use are hidden rather than refused after a confirmation.
+    private final boolean canRevert = RoleAccess.allows(ChannelHistoryTasks.REVERT_CODE_TEMPLATE);
+    private final boolean canPrune = RoleAccess.allows(ChannelHistoryTasks.PRUNE_CODE_TEMPLATE_HISTORY);
 
     public CodeTemplateHistoryDialog(JFrame parent, String codeTemplateId, String codeTemplateName) {
         super(parent, "Version History - " + codeTemplateName, true);
@@ -116,7 +119,7 @@ public class CodeTemplateHistoryDialog extends JDialog {
             }
 
             private void handlePopup(MouseEvent e) {
-                if (e.isPopupTrigger()) {
+                if (e.isPopupTrigger() && canPrune) {
                     int row = tblRevisions.rowAtPoint(e.getPoint());
                     if (row >= 0 && !tblRevisions.isRowSelected(row)) {
                         tblRevisions.setRowSelectionInterval(row, row);
@@ -141,8 +144,8 @@ public class CodeTemplateHistoryDialog extends JDialog {
         JLabel helpLabel = new JLabel(new ImageIcon(Frame.class.getResource("images/help.png")));
         String helpText = "<html>" +
                 "<b>Double-click</b> a revision to compare with previous<br>" +
-                "<b>Ctrl/Cmd-click</b> to select two revisions, then Show Diff<br>" +
-                "<b>Right-click</b> for prune option" +
+                "<b>Ctrl/Cmd-click</b> to select two revisions, then Show Diff" +
+                (canPrune ? "<br><b>Right-click</b> for prune option" : "") +
                 "</html>";
         helpLabel.setToolTipText(helpText);
         helpLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
@@ -170,6 +173,7 @@ public class CodeTemplateHistoryDialog extends JDialog {
         btnRevert = new JButton("Revert to Selected");
         btnRevert.setEnabled(false);
         btnRevert.addActionListener(e -> revertToSelected());
+        btnRevert.setVisible(canRevert);
         buttonPanel.add(btnRevert);
 
         JButton btnClose = new JButton("Close");
@@ -201,7 +205,7 @@ public class CodeTemplateHistoryDialog extends JDialog {
                 toFront();
                 requestFocus();
             } catch (Exception e) {
-                PlatformUI.MIRTH_FRAME.alertThrowable(PlatformUI.MIRTH_FRAME, e);
+                RoleAccess.alertFailure(this, e, "You don't have permission to view this code template's history.");
             }
         });
     }
@@ -229,7 +233,7 @@ public class CodeTemplateHistoryDialog extends JDialog {
             DiffWindow dw = DiffWindow.create(this, "Code Template Diff - " + codeTemplateName, leftLabel, rightLabel, left, right);
             DiffWindow.showOverAdministrator(dw);
         } catch (Exception e) {
-            PlatformUI.MIRTH_FRAME.alertThrowable(PlatformUI.MIRTH_FRAME, e);
+            RoleAccess.alertFailure(this, e, "You don't have permission to view this code template's history.");
         }
     }
 
@@ -281,7 +285,7 @@ public class CodeTemplateHistoryDialog extends JDialog {
                 loadHistory();
             }
         } catch (Exception e) {
-            PlatformUI.MIRTH_FRAME.alertThrowable(PlatformUI.MIRTH_FRAME, e);
+            RoleAccess.alertFailure(this, e, "You don't have permission to revert this code template.");
         }
     }
 
@@ -316,7 +320,7 @@ public class CodeTemplateHistoryDialog extends JDialog {
             PlatformUI.MIRTH_FRAME.alertInformation(this, "Deleted " + deleted + " older revision(s).");
             loadHistory();
         } catch (Exception e) {
-            PlatformUI.MIRTH_FRAME.alertThrowable(PlatformUI.MIRTH_FRAME, e);
+            RoleAccess.alertFailure(this, e, "You don't have permission to prune this code template's history.");
         }
     }
 }
