@@ -174,7 +174,7 @@ public class DeletedItemsSettingsPanel extends AbstractSettingsPanel {
                 List<DeletedItemInfo> all = new ArrayList<>();
                 ChannelHistoryServletInterface svc = getServlet();
                 if (svc == null) {
-                    failures.add("Deleted items could not be loaded: the plugin's server side did not answer.");
+                    failures.add("Deleted items could not be loaded.");
                     return all;
                 }
                 try {

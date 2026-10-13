@@ -13,6 +13,8 @@ const EXT = '/extensions/simple-channel-history';
 /* ---- REST client (the 14 servlet endpoints) -------------------------------- */
 
 export function makeApi(api) {
+    // Prune and purge results go through the host's normal parsing, which unwraps the engine's
+    // {"int":2} and {"boolean":false} to plain values. Raw text would be the JSON itself.
     // Lists come back XStream-wrapped; asList unwraps { list: { <FQCN>: [...] } }. The engine always
     // uses the full class name.
     const list = (v) => api.asList(v, 'com.diridium.RevisionInfo');
@@ -22,20 +24,20 @@ export function makeApi(api) {
         getHistory: async (channelId) => list(await api.get(`${EXT}/history`, { channelId })),
         getContent: (channelId, revision) => api.getXml(`${EXT}/content`, { channelId, revision }),
         revertChannel: (channelId, revision) => api.post(`${EXT}/revertChannel`, null, { params: { channelId, revision } }),
-        pruneChannelHistory: (channelId, revision) => api.post(`${EXT}/pruneChannelHistory`, null, { params: { channelId, revision }, raw: true }),
+        pruneChannelHistory: (channelId, revision) => api.post(`${EXT}/pruneChannelHistory`, null, { params: { channelId, revision } }),
         // Code templates
         getCodeTemplateHistory: async (codeTemplateId) => list(await api.get(`${EXT}/codeTemplateHistory`, { codeTemplateId })),
         getCodeTemplateContent: (codeTemplateId, revision) => api.getXml(`${EXT}/codeTemplateContent`, { codeTemplateId, revision }),
         revertCodeTemplate: (codeTemplateId, revision) => api.post(`${EXT}/revertCodeTemplate`, null, { params: { codeTemplateId, revision } }),
-        pruneCodeTemplateHistory: (codeTemplateId, revision) => api.post(`${EXT}/pruneCodeTemplateHistory`, null, { params: { codeTemplateId, revision }, raw: true }),
+        pruneCodeTemplateHistory: (codeTemplateId, revision) => api.post(`${EXT}/pruneCodeTemplateHistory`, null, { params: { codeTemplateId, revision } }),
         // Deleted channels
         getDeletedChannels: async () => dlist(await api.get(`${EXT}/deletedChannels`)),
         getDeletedChannelContent: (id) => api.getXml(`${EXT}/deletedChannelContent`, { id }),
-        purgeDeletedChannel: (id) => api.post(`${EXT}/purgeDeletedChannel`, null, { params: { id }, raw: true }),
+        purgeDeletedChannel: (id) => api.post(`${EXT}/purgeDeletedChannel`, null, { params: { id } }),
         // Deleted code templates
         getDeletedCodeTemplates: async () => dlist(await api.get(`${EXT}/deletedCodeTemplates`)),
         getDeletedCodeTemplateContent: (id) => api.getXml(`${EXT}/deletedCodeTemplateContent`, { id }),
-        purgeDeletedCodeTemplate: (id) => api.post(`${EXT}/purgeDeletedCodeTemplate`, null, { params: { id }, raw: true })
+        purgeDeletedCodeTemplate: (id) => api.post(`${EXT}/purgeDeletedCodeTemplate`, null, { params: { id } })
     };
 }
 
