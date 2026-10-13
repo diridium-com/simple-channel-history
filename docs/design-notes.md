@@ -32,11 +32,11 @@ Channel snapshots and code template snapshots are numbered separately, both from
 
 ## Permissions
 
-Every endpoint declares the engine permission it needs: view or manage channels, or view or manage code templates. Whether a user has it is decided by the engine's authorization, or by a plugin that replaces it.
+Every endpoint declares the engine permission it needs: view or manage channels, or view or manage code templates. The plugin also registers each endpoint under that permission, so an authorization plugin such as Role-Based Access Control enforces it: a role needs view channels to see a channel's history, manage channels to revert or prune it or to use deleted channels, and the same for code templates. Before 2.8.1 the endpoints weren't registered, and rbac, which allows operations it has no permission for, let any role use them.
 
 The channel history endpoints apply the engine's per-channel restrictions. A deleted channel's snapshot is looked up by its snapshot number, which the engine's check can't map to a channel, so the plugin applies the restrictions itself: the list leaves out channels outside them, and reading or purging one of those snapshots is refused.
 
-Stock OIE gives every user every permission and has no channel restrictions. The channel restrictions matter with an authorization plugin such as [Role-Based Access Control](https://github.com/diridium-com/role-based-access-control), and the e2e tests check them with it installed.
+Stock OIE gives every user every permission and has no channel restrictions. Both matter with an authorization plugin such as [Role-Based Access Control](https://github.com/diridium-com/role-based-access-control), and the e2e tests check the permissions and the channel restrictions with it installed.
 
 Reverts, prunes and purges are written to the engine's event log with the user and address. Viewing history or a diff is not, so comparing revisions doesn't fill the log.
 
