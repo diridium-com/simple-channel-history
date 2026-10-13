@@ -8,7 +8,7 @@
  * Channels get the decomposed diff; code templates get a raw side-by-side diff.
  */
 
-import { formatRevisionTime, formatDateTime } from './schi-core.js';
+import { formatRevisionTime, formatDateTime, allows, TASKS } from './schi-core.js';
 import { openDiff } from './diff-window.js';
 
 // How the administrators label a revision: "Rev" and the item's revision number (RevisionInfo.getShortHash).
@@ -26,6 +26,9 @@ export function openHistory(platform, api, { kind, id, name }) {
     const { h, modal, toast, confirmDialog } = platform.ui;
     const isChannel = kind === 'channel';
     const noun = isChannel ? 'channel' : 'code template';
+    // Actions the user's role can't use are hidden rather than refused after a confirmation.
+    const canRevert = allows(platform, isChannel ? TASKS.REVERT_CHANNEL : TASKS.REVERT_CODE_TEMPLATE);
+    const canPrune = allows(platform, isChannel ? TASKS.PRUNE_CHANNEL_HISTORY : TASKS.PRUNE_CODE_TEMPLATE_HISTORY);
 
     const ops = isChannel
         ? {
@@ -62,11 +65,12 @@ export function openHistory(platform, api, { kind, id, name }) {
     const help = h('div', { style: 'font-size:11.5px; color:var(--text-dim); line-height:1.6; padding:2px 2px 8px' },
         h('div', 'Double-click a revision to compare with previous'),
         h('div', 'Ctrl/Cmd-click to select two revisions, then Show Diff'),
-        h('div', 'Right-click for prune option'));
+        canPrune ? h('div', 'Right-click for prune option') : null);
 
     const showDiffBtn = h('button.btn', { onClick: () => showDiffSelected() }, 'Show Diff');
     const revertBtn = h('button.btn', { onClick: () => revertSelected() }, 'Revert to Selected');
-    const buttonBar = h('div', { style: 'display:flex; gap:8px; justify-content:flex-end; padding-top:10px' }, showDiffBtn, revertBtn);
+    const buttonBar = h('div', { style: 'display:flex; gap:8px; justify-content:flex-end; padding-top:10px' },
+        showDiffBtn, canRevert ? revertBtn : null);
 
     // Fills the dialog; the dialog's width is set on the modal below.
     const body = h('div', { style: 'display:flex; flex-direction:column; width:100%; height:min(440px, calc(100vh - 160px))' },
@@ -144,6 +148,7 @@ export function openHistory(platform, api, { kind, id, name }) {
     }
 
     function rowMenu(rev, e) {
+        if (!canPrune) return;
         const older = olderThan(rev);
         platform.ui.contextMenu(e.clientX, e.clientY, [
             {

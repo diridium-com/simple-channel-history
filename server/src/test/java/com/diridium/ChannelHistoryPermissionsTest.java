@@ -6,11 +6,15 @@ package com.diridium;
 import static org.junit.Assert.*;
 
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
 
 import org.junit.Test;
 
+import com.mirth.connect.client.core.Permissions;
 import com.mirth.connect.client.core.api.MirthOperation;
 import com.mirth.connect.model.ExtensionPermission;
 
@@ -45,6 +49,38 @@ public class ChannelHistoryPermissionsTest {
         }
         assertEquals("every registered operation is an endpoint", endpoints, byOperation.size());
         assertTrue("the interface has endpoints", endpoints > 0);
+    }
+
+    @Test
+    public void testEveryTaskIsRegisteredUnderItsPermission() {
+        Map<String, String> byTask = new HashMap<>();
+        for (ExtensionPermission permission : new ChannelHistoryPermissions().getExtensionPermissions()) {
+            for (String task : permission.getTaskNames()) {
+                assertTrue(task + " needs its group, as rbac keys a group's tasks \"group/task\"", task.contains("/"));
+                assertNull(task + " is registered under two permissions", byTask.put(task, permission.getDisplayName()));
+            }
+        }
+        assertEquals(ChannelHistoryTasks.permissions(), byTask);
+    }
+
+    @Test
+    public void testDeletedItemsTabHasItsOwnRefreshEntry() {
+        // Without it, rbac 1.1.3 hides the tab from every role without the Data Pruner's View Settings.
+        assertEquals(Permissions.CHANNELS_VIEW,
+                ChannelHistoryTasks.permissions().get("settings_Channel History: Deleted Items/doRefresh"));
+    }
+
+    @Test
+    public void testWebAdministratorUsesTheSameTaskNames() throws Exception {
+        String web = new String(Files.readAllBytes(Paths.get("..", "webadmin", "web", "schi-core.js")), StandardCharsets.UTF_8);
+        assertTrue("task group", web.contains("'" + ChannelHistoryTasks.GROUP + "'"));
+        assertTrue("Deleted Items tab", web.contains("'" + ChannelHistoryTasks.DELETED_ITEMS_TAB + "'"));
+        for (String key : ChannelHistoryTasks.permissions().keySet()) {
+            if (key.startsWith(ChannelHistoryTasks.GROUP + "/")) {
+                String task = key.substring(ChannelHistoryTasks.GROUP.length() + 1);
+                assertTrue(task + " is missing from schi-core.js", web.contains("'" + task + "'"));
+            }
+        }
     }
 
     @Test

@@ -6,6 +6,7 @@ package com.diridium;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 
 import com.mirth.connect.client.core.Permissions;
@@ -19,6 +20,9 @@ import com.mirth.connect.plugins.ServicePlugin;
  * hands a plugin's operations to the authorization controller as {@code "<extension>#<operation>"},
  * and a controller only knows the permission for names a plugin registered. Unregistered, rbac
  * allows them for every role.
+ *
+ * <p>Each permission also carries the UI tasks that need it ({@link ChannelHistoryTasks}), which rbac
+ * hands to the Administrators so they hide the actions a role can't use.</p>
  *
  * <p>The permissions are the engine's own, so a role that already grants view or manage channels or
  * code templates keeps its access. The stock engine ignores registered permissions.</p>
@@ -68,9 +72,17 @@ public class ChannelHistoryPermissions implements ServicePlugin {
         for (int i = 0; i < PERMISSIONS.length; i++) {
             registered[i] = new ExtensionPermission(ChannelHistoryServletInterface.PLUGIN_NAME, PERMISSIONS[i],
                     "Simple Channel History endpoints that need the engine's " + PERMISSIONS[i] + " permission.",
-                    operationsNeeding(PERMISSIONS[i]), new String[0]);
+                    operationsNeeding(PERMISSIONS[i]), tasksNeeding(PERMISSIONS[i]));
         }
         return registered;
+    }
+
+    /** The plugin's UI tasks that need this permission, as "group/task". */
+    static String[] tasksNeeding(String permission) {
+        return ChannelHistoryTasks.permissions().entrySet().stream()
+                .filter(entry -> entry.getValue().equals(permission))
+                .map(Map.Entry::getKey)
+                .toArray(String[]::new);
     }
 
     /**

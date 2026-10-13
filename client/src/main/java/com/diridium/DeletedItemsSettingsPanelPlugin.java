@@ -18,12 +18,13 @@ public class DeletedItemsSettingsPanelPlugin extends SettingsPanelPlugin {
 
     @Override
     public String getPluginPointName() {
-        return "Channel History: Deleted Items";
+        return ChannelHistoryTasks.DELETED_ITEMS_TAB;
     }
 
     @Override
     public AbstractSettingsPanel getSettingsPanel() {
-        return new DeletedItemsSettingsPanel("Channel History: Deleted Items");
+        // The tab name is also its task group's name, which ChannelHistoryTasks registers with a permission.
+        return new DeletedItemsSettingsPanel(ChannelHistoryTasks.DELETED_ITEMS_TAB);
     }
 
     @Override

@@ -34,6 +34,8 @@ Channel snapshots and code template snapshots are numbered separately, both from
 
 Every endpoint declares the engine permission it needs: view or manage channels, or view or manage code templates. The plugin also registers each endpoint under that permission, so an authorization plugin such as Role-Based Access Control enforces it: a role needs view channels to see a channel's history, manage channels to revert or prune it or to use deleted channels, and the same for code templates. Before 2.8.1 the endpoints weren't registered, and rbac, which allows operations it has no permission for, let any role use them.
 
+Each permission also carries the plugin's UI tasks (`ChannelHistoryTasks`), which rbac passes to both Administrators. A role that can't revert or prune doesn't see Revert or the Prune menu, and the Deleted Items tab loads only the lists the role covers. The tab has its own entry, tied to view channels, because a settings tab without one gets whatever another plugin registered for the refresh task all settings tabs share. With rbac 1.1.3 that is the Data Pruner's View Settings, which hid the tab from every role without it. If the server refuses a request anyway, say because a role changed while the Administrator was open, the Swing Administrator says so in one sentence instead of an error dialog.
+
 The channel history endpoints apply the engine's per-channel restrictions. A deleted channel's snapshot is looked up by its snapshot number, which the engine's check can't map to a channel, so the plugin applies the restrictions itself: the list leaves out channels outside them, and reading or purging one of those snapshots is refused.
 
 Stock OIE gives every user every permission and has no channel restrictions. Both matter with an authorization plugin such as [Role-Based Access Control](https://github.com/diridium-com/role-based-access-control), and the e2e tests check the permissions and the channel restrictions with it installed.
@@ -58,7 +60,7 @@ The history dialogs and Deleted Items call the server from the Administrator's U
 
 ## Tests
 
-- **Unit tests** cover the client's diff logic: the decomposer, the diff view's alignment, change and reorder detection, time labels and the Deleted Items filter.
+- **Unit tests** cover the client's diff logic: the decomposer, the diff view's alignment, change and reorder detection, time labels and the Deleted Items filter. They also check that every endpoint and UI task is registered under the permission it needs, and that the web administrator uses the same task names.
 - **End-to-end tests** (`e2e/run.py`, on every pull request) install the zip into the released OIE engine through its own installer, on Derby, PostgreSQL, MySQL, SQL Server (jTDS and Microsoft driver) and Oracle. They cover a fresh install, upgrades from earlier releases, uninstall, and an install alongside Role-Based Access Control. They drive the plugin through its REST API, including the JSON the web administrator reads, and check the database and the engine's log. CI also checks the zip itself: the version inside it, and that every client library `plugin.xml` names is in it.
 - **Not covered by automated tests:** the Swing and web screens themselves, which are checked by hand before each release, and the signed build, which is made and checked on the signing machine (see [RELEASING.md](../RELEASING.md)).
 
