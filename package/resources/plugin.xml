@@ -15,6 +15,7 @@
     <serverClasses>
         <string>com.diridium.ChannelVersionController</string>
         <string>com.diridium.CodeTemplateVersionController</string>
+        <string>com.diridium.ChannelHistoryPermissions</string>
     </serverClasses>
 
     <clientClasses>

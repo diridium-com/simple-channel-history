@@ -406,9 +406,10 @@ def uninstall(r, engine, db, dbname, new_zip, **_):
 
 
 def rbac(r, engine, db, dbname, new_zip, rbac_zip, **_):
-    """rbac installed alongside. A role limited to some channels must see and handle only those channels'
-    deleted snapshots. Admin is the control. Before 2.8.1 the deleted-channel endpoints ignored channel
-    restrictions. What a role without "manage channels" gets is recorded as a NOTE, not checked."""
+    """rbac installed alongside. Every endpoint must need the engine permission it declares, and a role
+    limited to some channels must see and handle only those channels' history and deleted snapshots. Admin
+    is the control. Before 2.8.1 rbac let every role use every endpoint, and the deleted-channel endpoints
+    ignored channel restrictions."""
     api = engine.start()
     for z in (new_zip, rbac_zip):
         ok, detail = c.install(api, z)
@@ -440,14 +441,16 @@ def rbac(r, engine, db, dbname, new_zip, rbac_zip, **_):
 
     channel_role = c.create_role(api, "SCH e2e two channels", ["viewChannels", "manageChannels"], [ids["L1"], ids["D1"]])
     template_role = c.create_role(api, "SCH e2e code templates only", ["viewCodeTemplates", "manageCodeTemplates"])
+    viewer_role = c.create_role(api, "SCH e2e view channels", ["viewChannels"])
     password = "Sch-e2e-" + c.new_id()[:12] + "!"
     users = {}
-    for name, role in (("sch-e2e-channels", channel_role), ("sch-e2e-templates", template_role)):
+    for name, role in (("sch-e2e-channels", channel_role), ("sch-e2e-templates", template_role),
+                       ("sch-e2e-viewer", viewer_role)):
         user_id = c.create_user(api, name, password)
         c.assign_role(api, user_id, role)
         users[name] = Api(engine.port, name, password)
         users[name].login(wait=60)
-    restricted, templates_only = users["sch-e2e-channels"], users["sch-e2e-templates"]
+    restricted, templates_only, viewer = users["sch-e2e-channels"], users["sch-e2e-templates"], users["sch-e2e-viewer"]
 
     # Control: rbac's restriction is in force where the engine itself checks it (the history endpoints).
     r.check("restricted user: channel L1's history is readable", c.history_status(restricted, "channel", ids["L1"]) == 200)
@@ -470,14 +473,33 @@ def rbac(r, engine, db, dbname, new_zip, rbac_zip, **_):
     status, text = c.purge_status(restricted, "channel", snapshot[ids["D1"]])
     r.check("restricted user: purging D1's snapshot works", status == 200 and "true" in text, f"HTTP {status}: {text[:100]}")
 
-    # The plugin's endpoints declare the engine's permissions ("manage channels" here), but rbac 1.1.3 has no
-    # mapping for another plugin's operations and allows any operation it doesn't know. So this role, which has
-    # no channel permissions, still gets the list. Recorded, not judged: the change belongs in rbac.
-    status, rows = c.deleted_status(templates_only, "channel")
-    r.note("templates-only user (no channel permissions): the deleted-channel list's HTTP status", status)
+    # Permissions: each endpoint needs the engine permission it declares. rbac only knows that because the
+    # plugin registers its operations (ChannelHistoryPermissions); before 2.8.1 it allowed them for any role.
     status, rows = c.deleted_status(templates_only, "template")
     r.check("templates-only user: the deleted code template DT is listed",
             status == 200 and any(row.get("itemId") == tid for row in rows or []), f"HTTP {status}")
+    status, rows = c.deleted_status(templates_only, "channel")
+    r.check("templates-only user (no manage channels): deleted channels are refused", status == 403, f"HTTP {status}")
+    status = c.history_status(templates_only, "channel", ids["L1"])
+    r.check("templates-only user (no view channels): channel L1's history is refused", status == 403, f"HTTP {status}")
+    status, rows = c.deleted_status(restricted, "template")
+    r.check("channels user (no manage code templates): deleted code templates are refused", status == 403,
+            f"HTTP {status}")
+
+    # View without manage: history is readable, changing it is refused. Control: the channels user, who has
+    # manage channels, can prune its own channel at its newest revision (nothing older, so nothing deleted).
+    status = c.history_status(viewer, "channel", ids["L2"])
+    r.check("view-only user: channel L2's history is readable", status == 200, f"HTTP {status}")
+    l1_newest = c.history_ids(api, "channel", ids["L1"])[0]
+    status, text = c.prune_status(restricted, "channel", ids["L1"], l1_newest)
+    r.check("channels user (manage channels): pruning its own channel L1 is allowed", status == 200, f"HTTP {status}: {text[:100]}")
+    l2_newest = c.history_ids(api, "channel", ids["L2"])[0]
+    status, text = c.prune_status(viewer, "channel", ids["L2"], l2_newest)
+    r.check("view-only user: pruning channel L2 is refused", status == 403, f"HTTP {status}")
+    status, text = c.revert_status(viewer, "channel", ids["L2"], l2_newest)
+    r.check("view-only user: reverting channel L2 is refused", status == 403, f"HTTP {status}")
+    status, rows = c.deleted_status(viewer, "channel")
+    r.check("view-only user: deleted channels are refused", status == 403, f"HTTP {status}")
 
     status, text = c.deleted_content_status(api, "channel", snapshot[ids["D2"]])
     r.check("admin still reads D2's snapshot", status == 200 and ids["D2"] in text, f"HTTP {status}")

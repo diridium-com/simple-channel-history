@@ -318,6 +318,12 @@ def json_list(api, path, query=None):
     return status, (json.loads(text) if status == 200 and text.strip() else None)
 
 
+def revert_status(api, kind, item_id, history_id):
+    """Revert without raising on an error status. Returns (HTTP status, body)."""
+    path, key = (("/revertChannel", "channelId") if kind == "channel" else ("/revertCodeTemplate", "codeTemplateId"))
+    return api.request("POST", EXT + path, query={key: item_id, "revision": history_id})
+
+
 def prune_status(api, kind, item_id, keep_from_history_id):
     """Prune without raising on an error status. Returns (HTTP status, body)."""
     path, key = (("/pruneChannelHistory", "channelId") if kind == "channel"
