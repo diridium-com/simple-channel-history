@@ -66,20 +66,23 @@ def install_and_restart(r, engine, api, zip_path):
     return api
 
 
-def check_logs(r, engine):
-    errors = engine.plugin_log_lines("ERROR")
-    r.check("no ERROR lines from the plugin in mirth.log", not errors, " | ".join(errors[:3]))
+def check_logs(r, engine, expected=(), where=""):
+    """expected: ERROR lines already checked as the ones that should be there."""
+    errors = [line for line in engine.plugin_log_lines("ERROR") if line not in expected]
+    r.check(f"no ERROR lines from the plugin in mirth.log{where}", not errors, " | ".join(errors[:3]))
     # simple-channel-history #27: Derby and Oracle logged a migrator warning on every startup after the first.
     warnings = engine.plugin_log_lines("WARN")
-    r.check("no WARN lines from the plugin in mirth.log", not warnings, " | ".join(warnings[:3]))
+    r.check(f"no WARN lines from the plugin in mirth.log{where}", not warnings, " | ".join(warnings[:3]))
 
 
-def check_tables_created_once(r, engine):
-    """The migrator runs on every startup. Its create scripts must run on the first one only."""
-    lines = engine.plugin_log_lines("INFO")
+def check_tables_created_once(r, *engines):
+    """The migrator runs on every startup. Its create scripts must run on the first one only, across an engine
+    upgrade too."""
+    lines = [line for engine in engines for line in engine.plugin_log_lines("INFO")]
+    starts = sum(engine.starts for engine in engines)
     for description in ("History tables", "Deleted item tables"):
         count = sum(1 for line in lines if f"HistoryMigrator: {description} created" in line)
-        r.check(f"'{description} created' logged once across {engine.starts} engine starts", count == 1,
+        r.check(f"'{description} created' logged once across {starts} engine starts", count == 1,
                 f"logged {count} times")
 
 
@@ -330,7 +333,9 @@ def fresh(r, engine, db, dbname, new_zip, **_):
     check_logs(r, engine)
 
 
-def upgrade(r, engine, db, dbname, new_zip, old_zip, **_):
+def upgrade(r, engine, db, dbname, new_zip, old_zip, upgrade_engine=None, **_):
+    """With upgrade_engine, the old release runs on the older engine it was built for, and the engine is upgraded
+    under it before the new zip goes in: the path every user of the old release takes."""
     api = engine.start()
     api = install_and_restart(r, engine, api, old_zip)
     cid, m = c.new_id(), c.markers("UA")
@@ -348,6 +353,17 @@ def upgrade(r, engine, db, dbname, new_zip, old_zip, **_):
     before = {"channel": c.history_ids(api, "channel", cid), "template": c.history_ids(api, "template", tid)}
     r.check("old version: 2 channel and 2 template history rows", [len(v) for v in before.values()] == [2, 2], str(before))
 
+    engines, skipped = [engine], []
+    if upgrade_engine:
+        engine.stop()
+        engine = upgrade_engine(engine)
+        engines.append(engine)
+        api = engine.start()
+        # Control: the old release is still installed under the upgraded engine, which skips it.
+        skipped = [line for line in engine.plugin_log_lines("ERROR") if "is not compatible" in line]
+        r.check("after the engine upgrade: the engine skipped the old release", len(skipped) == 1,
+                f"{len(skipped)} 'is not compatible' lines")
+
     api = install_and_restart(r, engine, api, new_zip)
     r.check("after the upgrade: channel UA history unchanged", c.history_ids(api, "channel", cid) == before["channel"])
     r.check("after the upgrade: code template UT history unchanged", c.history_ids(api, "template", tid) == before["template"])
@@ -359,8 +375,20 @@ def upgrade(r, engine, db, dbname, new_zip, old_zip, **_):
             any(row.get("itemId") == gone for row in c.deleted(api, "channel")))
     r.check("after the upgrade: a new save is recorded", c.update_channel(api, cid, "SCH e2e UA", m["v3"])
             and len(c.history_ids(api, "channel", cid)) == 3)
-    check_tables_created_once(r, engine)
-    check_logs(r, engine)
+    if upgrade_engine and len(ids) == 2 and len(before["template"]) == 2:
+        # Only this path puts XML the older engine saved back into the newer one.
+        r.check("after the engine upgrade: revert channel UA to its first revision, saved by the old engine",
+                c.revert(api, "channel", cid, ids[1]))
+        desc = c.channel_description(api, cid)
+        r.check("channel UA description is v1 plus the revert note",
+                desc.startswith(m["v1"]) and "BEGIN REVERT HISTORY" in desc, desc[:120])
+        r.check("after the engine upgrade: revert code template UT to its first revision, saved by the old engine",
+                c.revert(api, "template", tid, before["template"][1]))
+        r.check("code template UT has 3 history rows after the revert", len(c.history_ids(api, "template", tid)) == 3)
+    check_tables_created_once(r, *engines)
+    if upgrade_engine:
+        check_logs(r, engines[0], where=" (old engine)")
+    check_logs(r, engine, expected=skipped)
 
 
 def uninstall(r, engine, db, dbname, new_zip, **_):

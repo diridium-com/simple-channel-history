@@ -1,0 +1,3 @@
+# Older engines the upgrade scenarios start on, one per line: version, SHA-256 of the tarball, download URL.
+# An upgrade from a release built for one of these runs that release here, then upgrades the engine under it.
+4.6.0 7c82e79027e671277e1d78d0f7bbb1c53ddf1be476f1e80c2ddbfcf7855900ea https://github.com/OpenIntegrationEngine/engine/releases/download/v4.6.0/oie_unix_4_6_0.tar.gz

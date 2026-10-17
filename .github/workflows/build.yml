@@ -23,19 +23,25 @@ permissions:
   contents: read
 
 jobs:
+  # Tests on 17 and on 21, the Java the OIE 4.7.0 installers bundle. Both compile to Java 17 (<release>17).
   build:
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        java: ['17', '21']
     outputs:
       tag: ${{ steps.engine.outputs.tag }}
       tarball: ${{ steps.engine.outputs.tarball }}
+      label_as: ${{ steps.engine.outputs.label_as }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - name: Set up JDK 17
+      - name: Set up JDK ${{ matrix.java }}
         uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: ${{ matrix.java }}
           cache: maven
 
       # The engine version lives in exactly one place, the POM's mc.version. Hardcoding
@@ -55,6 +61,14 @@ jobs:
           echo "mc_version=$MC_VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=v${MC_VERSION}" >> "$GITHUB_OUTPUT"
           echo "tarball=oie_unix_${MC_VERSION//./_}.tar.gz" >> "$GITHUB_OUTPUT"
+          # A release can target an engine that isn't published yet (plugin.supported.mc.versions set
+          # explicitly, see pom.xml). The e2e job then runs on mc.version's engine with the zips relabelled
+          # to it, since the engine only loads a plugin built for its exact version.
+          TARGET="$(mvn -q -N org.apache.maven.plugins:maven-help-plugin:3.5.1:evaluate -Dexpression=plugin.supported.mc.versions -DforceStdout)"
+          if [ "$TARGET" != "$MC_VERSION" ]; then
+            echo "::warning::plugin.xml targets OIE ${TARGET}; the e2e job runs on OIE ${MC_VERSION} with the zips relabelled to it."
+            echo "label_as=$MC_VERSION" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Cache OIE distribution
         id: oie-cache
@@ -128,7 +142,9 @@ jobs:
           [ "${#zips[@]}" -eq 1 ] || { echo "::error::expected one plugin zip, found ${#zips[@]}"; exit 1; }
           bash scripts/check-zip-libraries.sh "${zips[0]}"
 
+      # One leg uploads, since two uploads of one artifact name fail: the 17 leg, which builds like release.yml.
       - name: Upload the plugin zip for the e2e job
+        if: matrix.java == '17'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: plugin-zip
@@ -193,6 +209,7 @@ jobs:
         env:
           DB: ${{ matrix.db }}
           OIE_TARBALL: ${{ needs.build.outputs.tarball }}
+          LABEL_AS: ${{ needs.build.outputs.label_as }}
           PYTHONDONTWRITEBYTECODE: '1'
         run: |
           zips=(plugin-zip/simple-channel-history-*.zip)
@@ -200,7 +217,9 @@ jobs:
             echo "::error::expected exactly one plugin zip, found: ${zips[*]}"
             exit 1
           fi
-          python3 e2e/run.py --db "$DB" --zip "${zips[0]}" --tarball "$OIE_TARBALL" --work "$RUNNER_TEMP/e2e"
+          relabel=()
+          if [ -n "$LABEL_AS" ]; then relabel=(--label-as "$LABEL_AS"); fi
+          python3 e2e/run.py --db "$DB" --zip "${zips[0]}" --tarball "$OIE_TARBALL" --work "$RUNNER_TEMP/e2e" "${relabel[@]}"
 
       - name: Upload engine logs
         if: always()
@@ -208,7 +227,7 @@ jobs:
         with:
           name: e2e-logs-${{ matrix.db }}
           path: |
-            ${{ runner.temp }}/e2e/*/oie/logs/
-            ${{ runner.temp }}/e2e/*/oie/console-*.log
+            ${{ runner.temp }}/e2e/*/oie*/logs/
+            ${{ runner.temp }}/e2e/*/oie*/console-*.log
           if-no-files-found: ignore
           retention-days: 7

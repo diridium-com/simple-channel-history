@@ -48,6 +48,8 @@ The engine loads a plugin only on an engine version listed in its `plugin.xml`, 
 
 The engine's libraries are compile-time dependencies, at the versions the engine ships, and none are bundled. Unit tests can't tell when they drift from the engine; the e2e tests can, because they run the plugin inside the released engine.
 
+**2.9.0 is a deliberate exception** (2026-10-16). It targets OIE 4.7.0 but compiles against the 4.6.0 engine jars, because 4.7.0 wasn't published when 2.9.0 shipped and its jars couldn't be downloaded. That is safe only because the zip contains no engine jars and a comparison of the two engines' libraries found nothing this plugin uses had changed; the log4j pin follows 4.7.0's 2.26.1. Until 4.7.0 is published, CI runs the e2e tests on 4.6.0 with a copy of each zip whose `plugin.xml` names 4.6.0 (`--label-as`), since the engine loads only a plugin built for its exact version. The 4.7.0 engine itself was tested on its release candidate, on all six databases on Java 21, including an upgrade from each earlier release across the engine upgrade. The next release compiles against 4.7.0 and drops the relabelling.
+
 ## Diffs
 
 The diff breaks a channel into components (scripts, connector settings, filter and transformer steps, plugin properties) and compares each one. Steps are compared by position: inserting a step at the top shows every later step as changed. When a group's steps are all the same and only their order changed, the group is labelled "(steps reordered)". The raw XML diff is always exact.
@@ -61,7 +63,7 @@ The history dialogs and Deleted Items call the server from the Administrator's U
 ## Tests
 
 - **Unit tests** cover the client's diff logic: the decomposer, the diff view's alignment, change and reorder detection, time labels and the Deleted Items filter. They also check that every endpoint and UI task is registered under the permission it needs, and that the web administrator uses the same task names.
-- **End-to-end tests** (`e2e/run.py`, on every pull request) install the zip into the released OIE engine through its own installer, on Derby, PostgreSQL, MySQL, SQL Server (jTDS and Microsoft driver) and Oracle. They cover a fresh install, upgrades from earlier releases, uninstall, and an install alongside Role-Based Access Control. They drive the plugin through its REST API, including the JSON the web administrator reads, and check the database and the engine's log. CI also checks the zip itself: the version inside it, and that every client library `plugin.xml` names is in it.
+- **End-to-end tests** (`e2e/run.py`, on every pull request) install the zip into the released OIE engine through its own installer, on Derby, PostgreSQL, MySQL, SQL Server (jTDS and Microsoft driver) and Oracle. They cover a fresh install, upgrades from earlier releases (on the older engine an earlier release was built for, then across the engine upgrade), uninstall, and an install alongside Role-Based Access Control. They drive the plugin through its REST API, including the JSON the web administrator reads, and check the database and the engine's log. CI also checks the zip itself: the version inside it, and that every client library `plugin.xml` names is in it.
 - **Not covered by automated tests:** the Swing and web screens themselves, which are checked by hand before each release, and the signed build, which is made and checked on the signing machine (see [RELEASING.md](../RELEASING.md)).
 
 ## Expected build warnings
