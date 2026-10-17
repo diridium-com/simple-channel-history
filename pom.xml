@@ -15,9 +15,13 @@
     <packaging>pom</packaging>
 
     <properties>
-        <revision>2.8.1</revision>
+        <revision>2.9.0</revision>
 
-        <plugin.supported.mc.versions>${mc.version}</plugin.supported.mc.versions>
+        <!-- Temporary: 2.9.0 targets OIE 4.7.0 but compiles against the 4.6.0 engine jars,
+             because 4.7.0 wasn't published when it shipped. The engine APIs simple-channel-history
+             uses are the same in both (checked 2026-10-16). In the next release, set mc.version
+             to 4.7.0 and set this back to ${mc.version}. -->
+        <plugin.supported.mc.versions>4.7.0</plugin.supported.mc.versions>
 
         <mc.version>4.6.0</mc.version>
         <!-- The provided versions match what OIE ships (server-lib and client-lib), since that is
@@ -27,7 +31,7 @@
         <javax-rs-api.version>2.0.1</javax-rs-api.version>
         <xstream.version>1.4.20</xstream.version>
         <junit.version>4.13.2</junit.version>
-        <log4j.version>2.25.3</log4j.version>
+        <log4j.version>2.26.1</log4j.version>
         <slf4j.version>1.7.30</slf4j.version>
         <mybatis.version>3.1.1</mybatis.version>
 

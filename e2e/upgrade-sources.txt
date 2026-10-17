@@ -1,4 +1,5 @@
 # Releases the upgrade scenarios start from, one per line: version, SHA-256 of the zip, download URL.
+# A release built for an older engine than the zip under test starts on that engine (engines.txt).
 # 2.8.1: the current signed release.
 # 2.8.0: the previous signed release.
 # 2.7.2: what the OIE Community Store served, from Chris Gibson's fork, until 2026-10-07.

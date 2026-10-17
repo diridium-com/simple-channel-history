@@ -33,7 +33,8 @@ PostgreSQL, MySQL, Oracle, SQL Server, and Derby.
 
 ## Compatibility
 
-Requires Open Integration Engine **4.6.0**. The engine only loads a plugin built for its exact
+Requires Open Integration Engine **4.7.0**. For OIE 4.6.0, use simple-channel-history 2.8.1.
+The engine only loads a plugin built for its exact
 version, so each OIE release gets a matching plugin release. The web administrator UI requires a web
 admin build that provides the channel/code-template action extension points and the
 Monaco-backed diff viewer (4.6+). A restart is required after install. See the

@@ -11,6 +11,7 @@ import socket
 import subprocess
 import tarfile
 import time
+import xml.etree.ElementTree as ET
 import zipfile
 
 from oie import Api, ApiError
@@ -39,6 +40,28 @@ def unpack(tarball, dest):
     with tarfile.open(tarball) as tar:
         tar.extractall(dest, filter="data")
     return os.path.join(dest, "oie")
+
+
+def mirth_version(zip_path):
+    """The engine version a plugin zip is built for: its plugin.xml's mirthVersion."""
+    with zipfile.ZipFile(zip_path) as z:
+        name = next(n for n in z.namelist() if re.fullmatch(r"[^/]+/plugin\.xml", n))
+        return ET.fromstring(z.read(name)).findtext("mirthVersion")
+
+
+def relabel(zip_path, version, dest):
+    """A copy of a plugin zip whose plugin.xml says mirthVersion `version`, and nothing else changed. plugin.xml
+    sits outside the jars, so their signatures still verify."""
+    with zipfile.ZipFile(zip_path) as src, zipfile.ZipFile(dest, "w") as out:
+        for info in src.infolist():
+            data = src.read(info)
+            if re.fullmatch(r"[^/]+/plugin\.xml", info.filename):
+                data, count = re.subn(rb"<mirthVersion>[^<]*</mirthVersion>",
+                                      f"<mirthVersion>{version}</mirthVersion>".encode(), data)
+                if count != 1:
+                    raise RuntimeError(f"{zip_path}: expected one mirthVersion in {info.filename}, found {count}")
+            out.writestr(info, data)
+    return dest
 
 
 def set_properties(path, values):
@@ -76,10 +99,26 @@ class Engine:
         values = {
             "https.host": "127.0.0.1",
             "http.host": "127.0.0.1",
+            # From 4.7.0 a new database gets a random admin password unless this is set. Older engines ignore it.
+            "server.initialadminpassword": "admin",
         }
         values.update(database_settings)
         set_properties(os.path.join(self.home, "conf", "mirth.properties"), values)
         self._set_ports()
+
+    def upgrade_to(self, pristine, home):
+        """Upgrades this stopped engine the way a tarball upgrade does: a fresh copy of the newer engine, plus
+        this one's appdata, mirth.properties and third-party extensions. It keeps the same database, which for
+        Derby lives in appdata."""
+        new = Engine(pristine, home, self.java_home)
+        shutil.copytree(os.path.join(self.home, "appdata"), os.path.join(home, "appdata"), symlinks=True)
+        shutil.copy2(os.path.join(self.home, "conf", "mirth.properties"), os.path.join(home, "conf", "mirth.properties"))
+        for name in os.listdir(os.path.join(self.home, "extensions")):
+            if not os.path.exists(os.path.join(home, "extensions", name)):
+                shutil.copytree(os.path.join(self.home, "extensions", name), os.path.join(home, "extensions", name),
+                                symlinks=True)
+        new._set_ports()
+        return new
 
     def _set_ports(self):
         self.port, http_port = free_ports(2)

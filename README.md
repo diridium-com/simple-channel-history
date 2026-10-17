@@ -3,9 +3,11 @@
 [![GitHub release](https://img.shields.io/github/v/release/diridium-com/simple-channel-history)](https://github.com/diridium-com/simple-channel-history/releases/latest)
 [![License: MPL-2.0](https://img.shields.io/badge/License-MPL_2.0-brightgreen.svg)](https://www.mozilla.org/en-US/MPL/2.0/)
 [![Java 17+](https://img.shields.io/badge/Java-17%2B-blue)](https://openjdk.org/projects/jdk/17/)
-[![OIE 4.6.0](https://img.shields.io/badge/OIE-4.6.0-blue)](https://github.com/OpenIntegrationEngine/engine)
+[![OIE 4.7.0](https://img.shields.io/badge/OIE-4.7.0-blue)](https://github.com/OpenIntegrationEngine/engine)
 
 An Open Integration Engine plugin for tracking version history of Channels and Code Templates.
+
+Running OIE 4.6.0? Use [simple-channel-history 2.8.1](https://github.com/diridium-com/simple-channel-history/releases/tag/v2.8.1).
 
 ## Features
 
@@ -77,16 +79,16 @@ The plugin zip will be in `package/target/simple-channel-history-<version>.zip`.
 
 ### End-to-end tests
 
-`e2e/run.py` installs a built zip into the released OIE engine through the engine's own installer and checks the plugin on a real database: a fresh install, an upgrade from each release in `e2e/upgrade-sources.txt`, an uninstall, and an install alongside [Role-Based Access Control](https://github.com/diridium-com/role-based-access-control) (the release in `e2e/rbac-source.txt`), where a role limited to some channels must see only those channels' deleted snapshots. CI runs it on every push and pull request against Derby, PostgreSQL, MySQL, SQL Server (jTDS and Microsoft drivers) and Oracle.
+`e2e/run.py` installs a built zip into the released OIE engine through the engine's own installer and checks the plugin on a real database: a fresh install, an upgrade from each release in `e2e/upgrade-sources.txt` (a release built for an older engine runs on that engine first, from `e2e/engines.txt`, and the engine is upgraded under it), an uninstall, and an install alongside [Role-Based Access Control](https://github.com/diridium-com/role-based-access-control) (the release in `e2e/rbac-source.txt`), where a role limited to some channels must see only those channels' deleted snapshots. CI runs it on every push and pull request against Derby, PostgreSQL, MySQL, SQL Server (jTDS and Microsoft drivers) and Oracle, with the engine on Java 17 and on Java 21. While a release targets an engine that isn't published yet, CI runs it on the POM's `mc.version` engine with `--label-as`, which installs copies of the zips whose `plugin.xml` names that engine instead.
 
-Locally it needs Java 17, Docker for every database but Derby, and the OIE distribution tarball. `scripts/install-engine-jars.sh` leaves a checked copy in `target/oie-dist/`; a `mvn clean` of the whole project deletes it, so run the script again after one:
+Locally it needs Java 17 or later, Docker for every database but Derby, and the distribution tarball of the engine the zip is built for (the `mirthVersion` in its `plugin.xml`). When that is the POM's `mc.version`, `scripts/install-engine-jars.sh` leaves a checked copy in `target/oie-dist/`; a `mvn clean` of the whole project deletes it, so run the script again after one:
 
 ```bash
 python3 e2e/run.py --db postgres --zip package/target/simple-channel-history-<version>.zip \
     --tarball target/oie-dist/oie_unix_4_6_0.tar.gz --work /tmp/sch-e2e-1
 ```
 
-`--work` must not exist yet. Each engine and its logs stay there.
+`--work` must not exist yet. Each engine and its logs stay there. For a zip built for an engine that isn't published yet, use the `mc.version` tarball and add `--label-as <mc.version>`, as CI does.
 
 ## Installation
 
