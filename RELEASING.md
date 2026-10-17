@@ -59,7 +59,7 @@ unset PIN
 
 `read -s` takes the PIN without echoing it or leaving it in your shell history. The variable isn't exported, so only Maven gets the PIN, not the processes the build starts (npm, and the install scripts it runs).
 
-Copy `package/target/simple-channel-history-X.Y.Z.zip` somewhere safe right away. A later `mvn clean` deletes it, and it cannot be rebuilt without the key.
+The signed zip is `package/target/simple-channel-history-X.Y.Z.zip`. Run the commands below and in step 4 from `package/target/`.
 
 Check every jar before it goes anywhere. Each must print `jar verified.` and exit 0:
 
