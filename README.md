@@ -53,7 +53,7 @@ Requires Java 17+ and OIE libraries in your Maven repository (local or remote).
 ./scripts/install-engine-jars.sh
 ```
 
-The script installs the 4 engine jars this plugin builds against (`mirth-server`, `donkey-server`, `mirth-client-core` and `mirth-client`) into your local Maven repository, taken from the published OIE release matching the POM's `mc.version` and checked against that release's `sha256sums`. Run it once per engine version.
+The script installs the 4 engine jars this plugin builds against (`mirth-server`, `donkey-server`, `mirth-client-core` and `mirth-client`) into your local Maven repository, taken from the published OIE release matching the POM's `mc.version` and checked against the SHA-256 pinned in the POM (`oie.dist.sha256`). CI runs the same script. Run it once per engine version.
 
 ### Development Build (unsigned)
 
@@ -85,7 +85,7 @@ Locally it needs Java 17 or later, Docker for every database but Derby, and the 
 
 ```bash
 python3 e2e/run.py --db postgres --zip package/target/simple-channel-history-<version>.zip \
-    --tarball target/oie-dist/oie_unix_4_6_0.tar.gz --work /tmp/sch-e2e-1
+    --tarball target/oie-dist/oie_unix_4_7_0.tar.gz --work /tmp/sch-e2e-1
 ```
 
 `--work` must not exist yet. Each engine and its logs stay there. For a zip built for an engine that isn't published yet, use the `mc.version` tarball and add `--label-as <mc.version>`, as CI does.

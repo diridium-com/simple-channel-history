@@ -17,13 +17,14 @@
     <properties>
         <revision>2.9.0</revision>
 
-        <!-- Temporary: 2.9.0 targets OIE 4.7.0 but compiles against the 4.6.0 engine jars,
-             because 4.7.0 wasn't published when it shipped. The engine APIs simple-channel-history
-             uses are the same in both (checked 2026-10-16). In the next release, set mc.version
-             to 4.7.0 and set this back to ${mc.version}. -->
-        <plugin.supported.mc.versions>4.7.0</plugin.supported.mc.versions>
+        <plugin.supported.mc.versions>${mc.version}</plugin.supported.mc.versions>
 
-        <mc.version>4.6.0</mc.version>
+        <mc.version>4.7.0</mc.version>
+        <!-- SHA-256 of the OIE distribution for mc.version (oie_unix_<version>.tar.gz), from
+             the release's sha256sums file. scripts/install-engine-jars.sh checks the download
+             against it before taking the engine jars from it, and CI's e2e job checks the
+             tarball it runs against it too. Update it with mc.version. -->
+        <oie.dist.sha256>ab08558873dc6be1e474afaacc46efe94d29c945cd3381c10d0ae548ecb429de</oie.dist.sha256>
         <!-- The provided versions match what OIE ships (server-lib and client-lib), since that is
              what the plugin runs against: compiling against a newer line would let code call
              methods the engine lacks. Re-check them on every mc.version bump. -->

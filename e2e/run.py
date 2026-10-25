@@ -4,7 +4,7 @@
 """End-to-end tests: the plugin zip installed into the released OIE engine, on a real database.
 
     python3 e2e/run.py --db postgres --zip package/target/simple-channel-history-<version>.zip \\
-        --tarball oie_unix_4_6_0.tar.gz --work /tmp/sch-e2e-1
+        --tarball oie_unix_4_7_0.tar.gz --work /tmp/sch-e2e-1
 
 Databases: derby, postgres, mysql, sqlserver (jTDS driver), sqlserver-ms (Microsoft driver), oracle.
 Needs Java 17 (JAVA_HOME or --java-home) for the engine and Docker for every database but Derby.
