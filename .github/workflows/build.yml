@@ -5,11 +5,12 @@
 # installs the built zip into the released engine and runs e2e/run.py on each
 # database the engine supports.
 #
-# The engine jars this plugin compiles against are not on the public repsy
-# mirror at 4.6.0, so they come from the published OIE distribution, the same
-# tarball scripts/install-engine-jars.sh uses for local builds. The tarball is
-# cached by tag, so it is downloaded once and reused until the pinned version
-# changes.
+# The engine jars this plugin compiles against come from the published OIE
+# distribution, installed by scripts/install-engine-jars.sh, the same script
+# local builds use, which checks the tarball against the SHA-256 pinned in the
+# POM (oie.dist.sha256). Everything else comes from Maven Central. The tarball
+# is cached by engine version, so it is downloaded once and reused until the
+# pinned version changes.
 
 name: Build
 
@@ -31,8 +32,9 @@ jobs:
       matrix:
         java: ['17', '21']
     outputs:
-      tag: ${{ steps.engine.outputs.tag }}
+      mc_version: ${{ steps.engine.outputs.mc_version }}
       tarball: ${{ steps.engine.outputs.tarball }}
+      dist_sha256: ${{ steps.engine.outputs.dist_sha256 }}
       label_as: ${{ steps.engine.outputs.label_as }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -44,12 +46,10 @@ jobs:
           java-version: ${{ matrix.java }}
           cache: maven
 
-      # The engine version lives in exactly one place, the POM's mc.version. Hardcoding
-      # it here as well meant a future engine bump could leave CI installing old jars
-      # while the build compiled against something else, with nothing to catch it.
-      # The release tag and tarball name are mechanical transforms of that version, so
-      # if OIE ever changes its asset naming the download 404s loudly rather than
-      # resolving something stale.
+      # The engine version lives in exactly one place, the POM's mc.version, and the
+      # tarball's SHA-256 beside it. Hardcoding either here as well meant a future engine
+      # bump could leave CI installing old jars while the build compiled against something
+      # else, with nothing to catch it. The cache is keyed by that version.
       - name: Resolve the engine version from the POM
         id: engine
         run: |
@@ -59,8 +59,15 @@ jobs:
             exit 1
           fi
           echo "mc_version=$MC_VERSION" >> "$GITHUB_OUTPUT"
-          echo "tag=v${MC_VERSION}" >> "$GITHUB_OUTPUT"
+          # For the e2e job, which fetches and checks the tarball itself: the name and hash
+          # scripts/install-engine-jars.sh uses.
           echo "tarball=oie_unix_${MC_VERSION//./_}.tar.gz" >> "$GITHUB_OUTPUT"
+          DIST_SHA256="$(mvn -q -N org.apache.maven.plugins:maven-help-plugin:3.5.1:evaluate -Dexpression=oie.dist.sha256 -DforceStdout)"
+          if [[ ! "$DIST_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "::error::pom.xml oie.dist.sha256 is '${DIST_SHA256}', not a SHA-256"
+            exit 1
+          fi
+          echo "dist_sha256=$DIST_SHA256" >> "$GITHUB_OUTPUT"
           # A release can target an engine that isn't published yet (plugin.supported.mc.versions set
           # explicitly, see pom.xml). The e2e job then runs on mc.version's engine with the zips relabelled
           # to it, since the engine only loads a plugin built for its exact version.
@@ -71,55 +78,18 @@ jobs:
           fi
 
       - name: Cache OIE distribution
-        id: oie-cache
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
-          path: ${{ steps.engine.outputs.tarball }}
-          key: oie-dist-${{ steps.engine.outputs.tag }}
+          path: .oie-dist
+          key: oie-dist-${{ steps.engine.outputs.mc_version }}
 
-      - name: Download OIE distribution
-        if: steps.oie-cache.outputs.cache-hit != 'true'
-        env:
-          OIE_TAG: ${{ steps.engine.outputs.tag }}
-          OIE_TARBALL: ${{ steps.engine.outputs.tarball }}
-        run: curl -fSL -o "$OIE_TARBALL" "https://github.com/OpenIntegrationEngine/engine/releases/download/${OIE_TAG}/${OIE_TARBALL}"
-
-      # Whether it came from the cache or the download: checked against the release's own
-      # sha256sums before any jar from it is installed, as the e2e job checks it.
-      - name: Check the OIE distribution against the release's sha256sums
-        env:
-          OIE_TAG: ${{ steps.engine.outputs.tag }}
-          OIE_TARBALL: ${{ steps.engine.outputs.tarball }}
-        run: |
-          curl -fsSL -o sha256sums "https://github.com/OpenIntegrationEngine/engine/releases/download/${OIE_TAG}/sha256sums"
-          expected="$(awk -v f="$OIE_TARBALL" '{ n = $2; sub(/^\*/, "", n) } n == f { print $1 }' sha256sums)"
-          if [ -z "$expected" ]; then
-            echo "::error::${OIE_TARBALL} is not listed in the release's sha256sums"
-            exit 1
-          fi
-          echo "${expected}  ${OIE_TARBALL}" | sha256sum -c -
-
-      # The same 4 jars scripts/install-engine-jars.sh installs locally.
+      # The script local builds use: it downloads the distribution if the cache
+      # missed, checks it against the SHA-256 in the POM, and installs the 4
+      # engine jars.
       - name: Install engine jars into the local Maven repo
         env:
-          OIE_TARBALL: ${{ steps.engine.outputs.tarball }}
-          MC_VERSION: ${{ steps.engine.outputs.mc_version }}
-        run: |
-          # groupId:artifactId:path-under-oie, all scope provided.
-          JARS=(
-            "com.mirth.connect:mirth-server:server-lib/mirth-server.jar"
-            "com.mirth.connect:donkey-server:server-lib/donkey/donkey-server.jar"
-            "com.mirth.connect:mirth-client-core:server-lib/mirth-client-core.jar"
-            "com.mirth.connect:mirth-client:client-lib/mirth-client.jar"
-          )
-          members=()
-          for entry in "${JARS[@]}"; do members+=("oie/${entry##*:}"); done
-          tar xzf "$OIE_TARBALL" "${members[@]}"
-          for entry in "${JARS[@]}"; do
-            IFS=':' read -r group artifact rel <<< "$entry"
-            mvn -B -ntp -q org.apache.maven.plugins:maven-install-plugin:3.1.4:install-file -Dfile="oie/$rel" -DgroupId="$group" \
-              -DartifactId="$artifact" -Dversion="$MC_VERSION" -Dpackaging=jar
-          done
+          OIE_DIST_CACHE: ${{ github.workspace }}/.oie-dist
+        run: ./scripts/install-engine-jars.sh
 
       - name: Build and test
         run: mvn -B -ntp clean verify
@@ -179,27 +149,23 @@ jobs:
       - name: Restore OIE distribution
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
-          path: ${{ needs.build.outputs.tarball }}
-          key: oie-dist-${{ needs.build.outputs.tag }}
+          path: .oie-dist
+          key: oie-dist-${{ needs.build.outputs.mc_version }}
 
-      # The whole engine runs from this tarball, so it is checked against the release's own
-      # sha256sums here as well as in the build job.
-      - name: Download and verify OIE distribution
+      # The whole engine runs from this tarball: downloaded if the cache missed, and checked against
+      # the SHA-256 pinned in the POM either way, as scripts/install-engine-jars.sh does.
+      - name: Fetch and check the OIE distribution
         env:
-          OIE_TAG: ${{ needs.build.outputs.tag }}
+          MC_VERSION: ${{ needs.build.outputs.mc_version }}
           OIE_TARBALL: ${{ needs.build.outputs.tarball }}
+          OIE_SHA256: ${{ needs.build.outputs.dist_sha256 }}
         run: |
-          base="https://github.com/OpenIntegrationEngine/engine/releases/download/${OIE_TAG}"
-          if [ ! -f "$OIE_TARBALL" ]; then
-            curl -fSL -o "$OIE_TARBALL" "${base}/${OIE_TARBALL}"
+          mkdir -p .oie-dist
+          if [ ! -f ".oie-dist/$OIE_TARBALL" ]; then
+            curl -fSL -o ".oie-dist/$OIE_TARBALL.part" "https://github.com/OpenIntegrationEngine/engine/releases/download/v${MC_VERSION}/${OIE_TARBALL}"
+            mv ".oie-dist/$OIE_TARBALL.part" ".oie-dist/$OIE_TARBALL"
           fi
-          curl -fsSL -o sha256sums "${base}/sha256sums"
-          expected="$(awk -v f="$OIE_TARBALL" '{ n = $2; sub(/^\*/, "", n) } n == f { print $1 }' sha256sums)"
-          if [ -z "$expected" ]; then
-            echo "::error::${OIE_TARBALL} is not listed in the release's sha256sums"
-            exit 1
-          fi
-          echo "${expected}  ${OIE_TARBALL}" | sha256sum -c -
+          echo "${OIE_SHA256}  .oie-dist/${OIE_TARBALL}" | sha256sum -c -
 
       - name: Download the plugin zip
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -221,7 +187,7 @@ jobs:
           fi
           relabel=()
           if [ -n "$LABEL_AS" ]; then relabel=(--label-as "$LABEL_AS"); fi
-          python3 e2e/run.py --db "$DB" --zip "${zips[0]}" --tarball "$OIE_TARBALL" --work "$RUNNER_TEMP/e2e" "${relabel[@]}"
+          python3 e2e/run.py --db "$DB" --zip "${zips[0]}" --tarball ".oie-dist/$OIE_TARBALL" --work "$RUNNER_TEMP/e2e" "${relabel[@]}"
 
       - name: Upload engine logs
         if: always()
