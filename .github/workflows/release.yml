@@ -17,6 +17,12 @@
 # A tag whose release is already published is refused, so re-running this workflow can
 # never replace a published release's files with an unsigned build. An existing draft is
 # updated: publishing it is the last, manual step.
+#
+# Two jobs, so the token that can write to the repository never shares a job with the
+# build. The build job runs Maven, npm and every package they pull in with a read-only
+# token, and uploads the zip. The release job holds the write token and runs only the
+# steps below it: no checkout, no build tools and no action, just gh to download that zip
+# and create or update the draft.
 
 name: Release
 
@@ -26,14 +32,17 @@ on:
       - 'v*'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release:
+  build:
     runs-on: ubuntu-24.04
+    outputs:
+      asset: ${{ steps.pkg.outputs.asset }}
     steps:
-      # Keeps the job's write token out of .git/config, where every later step, the npm install
-      # during the build included, could read it. No later step needs git credentials.
+      # The token is read-only here, but no later step needs git credentials either, so keep it
+      # out of .git/config, where every later step, the npm install during the build included,
+      # could read it.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -44,24 +53,6 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: maven
-
-      - name: Refuse a tag whose release is already published
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if DRAFT="$(gh release view "$GITHUB_REF_NAME" --json isDraft -q .isDraft 2>&1)"; then
-            if [ "$DRAFT" != "true" ]; then
-              echo "::error::Release ${GITHUB_REF_NAME} is already published. Its files are never replaced; release a new version."
-              exit 1
-            fi
-            echo "A draft exists for ${GITHUB_REF_NAME}; it will be updated."
-          elif [ "$DRAFT" = "release not found" ]; then
-            echo "No release exists for ${GITHUB_REF_NAME} yet."
-          else
-            # Anything else (network, permissions) must not be taken for "no release".
-            echo "::error::Could not check for an existing release: $DRAFT"
-            exit 1
-          fi
 
       - name: Check the tag against every version file
         id: ver
@@ -161,14 +152,48 @@ jobs:
           ( cd out && sha256sum "${ASSET}" > "${ASSET}.sha256" )
           echo "asset=${ASSET}" >> "$GITHUB_OUTPUT"
 
-      - name: Create DRAFT GitHub Release with assets
-        # Stays a draft: the zip is unsigned. A human signs locally, replaces the
-        # zip and its .sha256 sidecar, and publishes (see RELEASING.md). Pinned
-        # to v2.6.2 by commit.
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
+      - name: Upload the release asset and checksum for the release job
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          draft: true
-          files: |
-            out/${{ steps.pkg.outputs.asset }}
-            out/${{ steps.pkg.outputs.asset }}.sha256
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          name: release-zip
+          path: out/
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write    # create or update the draft release
+      actions: read      # download the build job's artifact
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      ASSET: ${{ needs.build.outputs.asset }}
+    steps:
+      - name: Download the release asset and checksum
+        run: |
+          gh run download "$GITHUB_RUN_ID" --name release-zip --dir out
+          ( cd out && sha256sum -c "${ASSET}.sha256" )
+
+      - name: Create or update the DRAFT release
+        # Stays a draft: the zip is unsigned. A human signs locally, replaces the
+        # zip and its .sha256 sidecar, and publishes (see RELEASING.md).
+        run: |
+          if DRAFT="$(gh release view "$GITHUB_REF_NAME" --json isDraft -q .isDraft 2>&1)"; then
+            if [ "$DRAFT" != "true" ]; then
+              echo "::error::Release ${GITHUB_REF_NAME} is already published. Its files are never replaced; release a new version."
+              exit 1
+            fi
+            echo "A draft exists for ${GITHUB_REF_NAME}; replacing its files."
+            gh release upload "$GITHUB_REF_NAME" "out/${ASSET}" "out/${ASSET}.sha256" --clobber
+          elif [ "$DRAFT" = "release not found" ]; then
+            prerelease=()
+            case "$GITHUB_REF_NAME" in *-*) prerelease=(--prerelease) ;; esac
+            gh release create "$GITHUB_REF_NAME" "out/${ASSET}" "out/${ASSET}.sha256" \
+              --draft --verify-tag --title "$GITHUB_REF_NAME" --notes "" "${prerelease[@]}"
+          else
+            # Anything else (network, permissions) must not be taken for "no release".
+            echo "::error::Could not check for an existing release: $DRAFT"
+            exit 1
+          fi
