@@ -20,15 +20,15 @@ CI builds the committed files as they are, the same way the signed build does.
 
 ## 2. Tag
 
-Tag a commit on `main` whose CI run passed, the e2e jobs included. The release job runs the unit tests only, so a commit that never passed CI would ship without having run in a real engine.
+Tag a commit on `main` whose CI run passed, the e2e jobs included. The release workflow runs the unit tests only, so a commit that never passed CI would ship without having run in a real engine.
 
 ```bash
 git tag vX.Y.Z && git push origin vX.Y.Z
 ```
 
-`.github/workflows/release.yml` builds and tests against the OIE release named by the POM's `mc.version` and stages a **draft** release holding the unsigned `simple-channel-history-X.Y.Z.zip` and its `.sha256` sidecar. CI never publishes it. It refuses a tag whose release is already published, so a re-run cannot put the unsigned zip over the signed one.
+`.github/workflows/release.yml` builds and tests against the OIE release named by the POM's `mc.version` and stages a **draft** release holding the unsigned `simple-channel-history-X.Y.Z.zip` and its `.sha256` sidecar. CI never publishes it. It refuses a tag whose release is already published, so a re-run cannot put the unsigned zip over the signed one. The build and tests run in a job whose token can only read the repository; a second job, the only one that can write, downloads the zip and creates or updates the draft.
 
-If the release job fails, or the draft turns out wrong before anyone publishes it, delete the draft and the tag and tag again. Nobody has an unpublished version, so it keeps its number:
+If the release workflow fails, or the draft turns out wrong before anyone publishes it, delete the draft and the tag and tag again. Nobody has an unpublished version, so it keeps its number:
 
 ```bash
 gh release delete vX.Y.Z --yes          # the draft only; never a published release
